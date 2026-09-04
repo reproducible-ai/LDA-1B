@@ -182,3 +182,146 @@ def test_runner_launches_one_exact_four_gpu_one_step_command(monkeypatch, tmp_pa
     assert kwargs["cwd"] == tmp_path
     assert kwargs["check"] is True
     assert kwargs["env"]["WANDB_MODE"] == "disabled"
+
+
+def configure_packager(monkeypatch, tmp_path, *, include_dino_license: bool):
+    packager = load_script("package_robocasa_canary", monkeypatch)
+    root = tmp_path / "source"
+    base_snapshot = tmp_path / "base"
+    qwen_snapshot = tmp_path / "qwen"
+    dino_snapshot = tmp_path / "dino"
+    run_dir = tmp_path / "run"
+    release_root = tmp_path / "release"
+    for path in (root, base_snapshot, qwen_snapshot, dino_snapshot, run_dir):
+        path.mkdir(parents=True)
+
+    source_license = b"CC BY-NC 4.0: https://creativecommons.org/licenses/by-nc/4.0/\n"
+    (root / "LICENSE").write_bytes(source_license)
+    asset_root = root / ".treqs" / "assets"
+    asset_root.mkdir(parents=True)
+    apache_license = b"Apache License 2.0 fixture\n"
+    (asset_root / "APACHE-2.0.txt").write_bytes(apache_license)
+    (asset_root / "robocasa-demo-canary-model-card.md").write_bytes(
+        (ROOT / ".treqs" / "assets" / "robocasa-demo-canary-model-card.md").read_bytes()
+    )
+    (base_snapshot / "config.yaml").write_text(
+        "framework:\n  qwenvl: {}\n  action_model: {}\ntrainer: {}\ndatasets:\n  vla_data: {}\n"
+    )
+    (base_snapshot / "README.md").write_text("LDA base model card\n")
+    (qwen_snapshot / "README.md").write_text("Qwen model card\n")
+    (dino_snapshot / "config.json").write_text("{}\n")
+    (dino_snapshot / ".cache" / "huggingface").mkdir(parents=True)
+    (dino_snapshot / ".cache" / "huggingface" / "download.metadata").write_text("cache metadata\n")
+    dino_license = b"pinned DINOv3 license fixture\n"
+    if include_dino_license:
+        (dino_snapshot / "LICENSE.md").write_bytes(dino_license)
+
+    trained_checkpoint = run_dir / "checkpoint.pt"
+    trained_checkpoint.write_bytes(b"trained-checkpoint")
+    (run_dir / "dataset_statistics.json").write_text("{}\n")
+    evaluation_path = run_dir / "evaluation.json"
+    evaluation_path.write_text(
+        json.dumps(
+            {
+                "status": "passed",
+                "global_step": 1,
+                "checkpoint": {"sha256": sha256_file(trained_checkpoint)},
+            }
+        )
+    )
+    input_manifest = tmp_path / "input-manifest.json"
+    input_manifest.write_text("{}\n")
+
+    values = {
+        "ROOT": root,
+        "ASSET_ROOT": asset_root,
+        "BASE_SNAPSHOT": base_snapshot,
+        "QWEN_SNAPSHOT": qwen_snapshot,
+        "DINO_SNAPSHOT": dino_snapshot,
+        "RUN_DIR": run_dir,
+        "TRAINED_CHECKPOINT": trained_checkpoint,
+        "EVALUATION_PATH": evaluation_path,
+        "INPUT_MANIFEST_PATH": input_manifest,
+        "RELEASE_ROOT": release_root,
+        "RELEASE_CHECKPOINT": release_root / "checkpoints" / "canary.pt",
+        "DINO_LICENSE_SHA256": hashlib.sha256(dino_license).hexdigest(),
+        "SOURCE_LICENSE_SHA256": hashlib.sha256(source_license).hexdigest(),
+        "APACHE_LICENSE_SHA256": hashlib.sha256(apache_license).hexdigest(),
+    }
+    for name, value in values.items():
+        monkeypatch.setattr(packager, name, value, raising=False)
+    monkeypatch.setattr(packager, "source_commit", lambda: "a" * 40)
+    return packager, release_root
+
+
+def test_packager_fails_closed_without_the_pinned_dinov3_license(monkeypatch, tmp_path):
+    packager, release_root = configure_packager(
+        monkeypatch,
+        tmp_path,
+        include_dino_license=False,
+    )
+
+    with pytest.raises(RuntimeError, match="Missing DINOv3 license"):
+        packager.main()
+
+    assert not release_root.exists()
+
+
+@pytest.mark.parametrize(
+    ("license_name", "error"),
+    (
+        ("source", "LDA source license hash mismatch"),
+        ("apache", "Apache 2.0 license hash mismatch"),
+    ),
+)
+def test_packager_fails_closed_for_a_tampered_static_license(
+    monkeypatch,
+    tmp_path,
+    license_name,
+    error,
+):
+    packager, release_root = configure_packager(
+        monkeypatch,
+        tmp_path,
+        include_dino_license=True,
+    )
+    license_path = packager.ROOT / "LICENSE" if license_name == "source" else packager.ASSET_ROOT / "APACHE-2.0.txt"
+    license_path.write_text("tampered license\n")
+
+    with pytest.raises(RuntimeError, match=error):
+        packager.main()
+
+    assert not release_root.exists()
+
+
+def test_packager_bundles_and_discloses_component_licenses(monkeypatch, tmp_path):
+    packager, release_root = configure_packager(
+        monkeypatch,
+        tmp_path,
+        include_dino_license=True,
+    )
+
+    packager.main()
+
+    assert (release_root / "LICENSE").is_file()
+    assert (release_root / "CC-BY-NC-4.0.md").is_file()
+    assert (release_root / "APACHE-2.0.txt").is_file()
+    assert (release_root / "DINOv3-LICENSE.md").read_bytes() == (
+        release_root / "pretrained" / "dino" / "LICENSE.md"
+    ).read_bytes()
+    assert not (release_root / "pretrained" / "dino" / ".cache").exists()
+    licenses = {
+        record["id"]: record for record in json.loads((release_root / "publication.json").read_text())["licenses"]
+    }
+    assert licenses["CC-BY-NC-4.0"]["sha256"] == packager.SOURCE_LICENSE_SHA256
+    assert licenses["Apache-2.0"]["sha256"] == packager.APACHE_LICENSE_SHA256
+    assert licenses["LicenseRef-DINOv3"]["sha256"] == packager.DINO_LICENSE_SHA256
+    card = (release_root / "README.md").read_text()
+    assert "Built with DINOv3" in card
+    assert "component-specific" in card.lower()
+    publication = json.loads((release_root / "publication.json").read_text())
+    assert {license_record["id"] for license_record in publication["licenses"]} == {
+        "CC-BY-NC-4.0",
+        "Apache-2.0",
+        "LicenseRef-DINOv3",
+    }

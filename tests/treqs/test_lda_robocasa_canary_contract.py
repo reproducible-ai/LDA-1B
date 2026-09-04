@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import subprocess
 from pathlib import Path
@@ -176,6 +177,54 @@ def test_preparation_hashes_the_repo_demo_and_pins_hub_downloads():
     assert "input-manifest.json" in prepare
 
 
+def test_component_licenses_are_pinned_packaged_and_required_for_publication():
+    contract = load_contract()
+    prepare = (SCRIPTS / "prepare_robocasa_canary.py").read_text()
+    package = (SCRIPTS / "package_robocasa_canary.py").read_text()
+    workflow = load_workflow()
+    card = (ASSETS / "robocasa-demo-canary-model-card.md").read_text()
+    readme = (TREQS / "README.md").read_text()
+    pyproject = (ROOT / "pyproject.toml").read_text()
+
+    assert contract.DINO_LICENSE_NAME == "LICENSE.md"
+    assert contract.DINO_LICENSE_SHA256 == ("25d122eb8f5b880fd23c736fb6ea8018ee45c12237e00b8a86d14c653904999e")
+    assert contract.SOURCE_LICENSE_SHA256 == ("6f79f90412086c4bef35afa6257d5c85c5e16fb43e71be068deec028869feaf6")
+    assert contract.APACHE_LICENSE_SHA256 == ("cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30")
+    assert hashlib.sha256((ASSETS / "APACHE-2.0.txt").read_bytes()).hexdigest() == (
+        "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    )
+    assert "allow_patterns=[DINO_LICENSE_NAME]" in prepare
+    assert "DINO_LICENSE_SHA256" in prepare
+    assert 'RELEASE_ROOT / "DINOv3-LICENSE.md"' in package
+    assert 'RELEASE_ROOT / "APACHE-2.0.txt"' in package
+    assert 'RELEASE_ROOT / "CC-BY-NC-4.0.md"' in package
+    assert "SOURCE_LICENSE_SHA256" in package
+    assert "APACHE_LICENSE_SHA256" in package
+    assert '"licenses": [' in package
+
+    publish = workflow["publish"]["command"]
+    for filename in (
+        "LICENSE",
+        "CC-BY-NC-4.0.md",
+        "APACHE-2.0.txt",
+        "DINOv3-LICENSE.md",
+        "NOTICE",
+    ):
+        assert filename in publish
+    label = workflow["label"]["command"]
+    assert "license.id=LicenseRef-LDA-Composite" in label
+    assert "CC BY-NC 4.0; Apache 2.0; DINOv3 License" in label
+
+    assert "license: other" in card
+    assert "license_name: Component-specific licensing" in card
+    assert "Built with DINOv3" in card
+    assert "DINOv3-LICENSE.md" in card
+    assert "APACHE-2.0.txt" in card
+    assert "component-specific" in readme.lower()
+    assert 'license = {file = "LICENSE"}' in pyproject
+    assert "License :: OSI Approved :: MIT License" not in pyproject
+
+
 def test_evaluation_proves_a_real_updated_checkpoint():
     verify = (SCRIPTS / "verify_robocasa_canary.py").read_text()
     trainer = (ROOT / "lda" / "training" / "train_LDA.py").read_text()
@@ -213,7 +262,7 @@ def test_package_is_loader_compatible_and_documents_scope():
     assert 'config["datasets"]["vla_data"]["training_task_weights"] = [1.0]' in package
     assert "Packaged checkpoint hash differs from evaluation" in package
     card = (ASSETS / "robocasa-demo-canary-model-card.md").read_text()
-    assert "license: cc-by-nc-4.0" in card
+    assert "license: other" in card
     assert "base_model: Wayer2/LDA-robocasa" in card
     assert "base_model_relation: finetune" in card
     assert "one optimizer step" in card.lower()
@@ -251,8 +300,10 @@ def test_dino_architecture_can_be_built_without_gated_weight_download():
     assert "strict=strict" in tools
     assert "DINO_CONFIG" in prepare
     assert "DINO_PREPROCESSOR_CONFIG" in prepare
-    assert "snapshot_download(\n        repo_id=DINO_MODEL_ID" not in prepare
-    assert "DINO_MODEL_ID" not in preflight
+    assert "allow_patterns=[DINO_LICENSE_NAME]" in prepare
+    assert "DINO_LICENSE_NAME" in preflight
+    assert "DINO_MODEL_ID" in preflight
+    assert 'allow_patterns=["*.safetensors", "*.bin", "*.pt"]' not in prepare
 
 
 def test_qwen_wrapper_honors_configured_attention_backend():

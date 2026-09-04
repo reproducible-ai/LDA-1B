@@ -65,7 +65,7 @@ label:
     SOURCE_COMMIT="$(git rev-parse HEAD)"
     MODEL=artifacts/lda-robocasa-canary/release/checkpoints/LDA-robocasa-treqs-canary.pt
     test -s "$MODEL"
-    timeout --signal=TERM --kill-after=30 180 roar label set artifact "$MODEL" model.name=lda-robocasa-demo-canary model.version=0.0.1 license.id=CC-BY-NC-4.0 license.name='Creative Commons Attribution-NonCommercial 4.0' description='LDA RoboCasa one-step TReqs fine-tuning canary' documentation.url="https://github.com/reproducible-ai/LDA-1B/blob/${SOURCE_COMMIT}/.treqs/README.md"
+    timeout --signal=TERM --kill-after=30 180 roar label set artifact "$MODEL" model.name=lda-robocasa-demo-canary model.version=0.0.1 license.id=LicenseRef-LDA-Composite license.name='Component-specific: CC BY-NC 4.0; Apache 2.0; DINOv3 License' description='LDA RoboCasa one-step TReqs fine-tuning canary' documentation.url="https://github.com/reproducible-ai/LDA-1B/blob/${SOURCE_COMMIT}/.treqs/README.md"
   trace: "off"
 
 publish:
@@ -74,11 +74,11 @@ publish:
     set -euo pipefail
     export PATH="$PWD/.venv/bin:/usr/local/bin:/opt/pytorch/bin:$PATH"
     RELEASE=artifacts/lda-robocasa-canary/release
-    for document in README.md LICENSE NOTICE evaluation.json input-manifest.json publication.json; do
+    for document in README.md LICENSE CC-BY-NC-4.0.md APACHE-2.0.txt DINOv3-LICENSE.md NOTICE evaluation.json input-manifest.json publication.json; do
       test -s "$RELEASE/$document"
     done
     test -s "$RELEASE/checkpoints/LDA-robocasa-treqs-canary.pt"
     timeout --signal=TERM --kill-after=30 180 roar status --untracked-dirs
-    timeout --signal=TERM --kill-after=30 1800 roar put "$RELEASE/README.md" "$RELEASE/LICENSE" "$RELEASE/NOTICE" hf://reproducible-ai/harness-test-lda-robocasa-issue-5 --private --yes --no-tag -m "LDA RoboCasa canary model card and notices"
+    timeout --signal=TERM --kill-after=30 1800 roar put "$RELEASE/README.md" "$RELEASE/LICENSE" "$RELEASE/CC-BY-NC-4.0.md" "$RELEASE/APACHE-2.0.txt" "$RELEASE/DINOv3-LICENSE.md" "$RELEASE/NOTICE" hf://reproducible-ai/harness-test-lda-robocasa-issue-5 --private --yes --no-tag -m "LDA RoboCasa canary model card and component licenses"
     timeout --signal=TERM --kill-after=30 1800 roar put "$RELEASE" hf://reproducible-ai/harness-test-lda-robocasa-issue-5/robocasa-demo-canary-0.0.1 --private --yes --no-tag -m "LDA RoboCasa one-step TReqs reproducibility canary"
   trace: "off"

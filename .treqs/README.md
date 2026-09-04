@@ -22,9 +22,10 @@ publication.
 - Required target secret: `HF_TOKEN`
 
 The Hugging Face token needs read access to the pinned public LDA and Qwen
-inputs and write access to the `reproducible-ai` organization. DINOv3 is built
-from the vendored architecture plus a deterministic four-register-token config;
-strict loading proves every DINO tensor comes from the starting LDA checkpoint.
+inputs, the exact DINOv3 license at the pinned revision, and write access to the
+`reproducible-ai` organization. DINOv3 is built from the vendored architecture
+plus a deterministic four-register-token config; strict loading proves every
+DINO tensor comes from the starting LDA checkpoint.
 
 ## Lineage DAG
 
@@ -32,8 +33,9 @@ The four traced workload stages are explicit named `roar run` operations, while
 TReqs tracing is off to avoid nested tracer graphs. Label and publish then use
 ROAR's metadata and storage commands directly against those captured artifacts:
 
-1. `fetch` downloads exact LDA/Qwen revisions, generates the pinned DINO
-   architecture config, and hashes all model and demo files;
+1. `fetch` downloads exact LDA/Qwen revisions and the exact pinned DINOv3
+   license, generates the pinned DINO architecture config, and hashes all model
+   and demo files;
 2. `train` performs one policy-task optimizer step on four GPUs with Qwen and
    DINO frozen;
 3. `evaluate` verifies step 1, matching state-dict keys, distinct checkpoint
@@ -54,6 +56,9 @@ roar reproduce --lineage --run
 ## Scope
 
 This is a training-path canary, not an accuracy, convergence, or deployment
-claim. The source repository states CC BY-NC 4.0 for the work and dataset, so the
-published canary uses the same non-commercial license even though some upstream
-Hub metadata is less restrictive.
+claim. Release licensing is component-specific: the source and demo dataset are
+identified as CC BY-NC 4.0, Wayer2 and Qwen model metadata identify Apache 2.0,
+and embedded DINOv3 materials remain under the DINOv3 License. The package
+hash-verifies and includes all three notices before creating release output; it
+does not present CC BY-NC 4.0 as superseding the other component terms. This
+branch still does not authorize compute or publication.

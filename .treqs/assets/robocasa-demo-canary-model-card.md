@@ -1,5 +1,7 @@
 ---
-license: cc-by-nc-4.0
+license: other
+license_name: Component-specific licensing
+license_link: LICENSE
 base_model: Wayer2/LDA-robocasa
 base_model_relation: finetune
 tags:
@@ -52,7 +54,13 @@ needed because strict loading obtains every DINO tensor from this checkpoint.
 
 ## License
 
-The LDA source repository states that the work and dataset are licensed under
-CC BY-NC 4.0; this release therefore uses that stricter license. Upstream model
-cards are included under `upstream/` for attribution. DINO provenance is recorded
-in the manifest and publication metadata.
+Licensing is component-specific; no single license supersedes every upstream
+term. The LDA source and bundled demo dataset are identified as CC BY-NC 4.0 in
+`CC-BY-NC-4.0.md`. The Wayer2 checkpoint and Qwen model metadata identify Apache
+2.0; its terms are included as `APACHE-2.0.txt`. Embedded DINOv3 materials remain
+subject to the DINOv3 License included as `DINOv3-LICENSE.md`.
+
+Use and redistribution must comply with all applicable component terms. Upstream
+model cards are included under `upstream/` for provenance and attribution.
+
+**Built with DINOv3.**

@@ -1,4 +1,5 @@
 """Fail fast on Hugging Face read and namespace permissions."""
+
 from __future__ import annotations
 
 import base64
@@ -11,6 +12,9 @@ from urllib.request import Request, urlopen
 from lda_canary_contract import (
     BASE_MODEL_ID,
     BASE_MODEL_REVISION,
+    DINO_LICENSE_NAME,
+    DINO_MODEL_ID,
+    DINO_MODEL_REVISION,
     PUBLICATION_REPO_ID,
     QWEN_MODEL_ID,
     QWEN_MODEL_REVISION,
@@ -83,9 +87,7 @@ def check_private_writable_repo(repo_id: str, token: str) -> None:
         with urlopen(request, timeout=30) as response:
             result = json.load(response)
     except HTTPError as exc:
-        raise RuntimeError(
-            f"HF_TOKEN lacks write access to publication repo {repo_id} ({exc.code})"
-        ) from exc
+        raise RuntimeError(f"HF_TOKEN lacks write access to publication repo {repo_id} ({exc.code})") from exc
     files = result.get("files", [])
     if len(files) != 1 or files[0].get("uploadMode") not in {"regular", "lfs"}:
         raise RuntimeError("Hugging Face pre-upload check returned an invalid response")
@@ -99,14 +101,13 @@ def main() -> None:
     checks = (
         (BASE_MODEL_ID, BASE_MODEL_REVISION, "config.yaml"),
         (QWEN_MODEL_ID, QWEN_MODEL_REVISION, "config.json"),
+        (DINO_MODEL_ID, DINO_MODEL_REVISION, DINO_LICENSE_NAME),
     )
     for repo_id, revision, filename in checks:
         try:
             check_file(repo_id, revision, filename, token)
         except HTTPError as exc:
-            raise RuntimeError(
-                f"HF_TOKEN cannot read {repo_id}@{revision}:{filename} ({exc.code})"
-            ) from exc
+            raise RuntimeError(f"HF_TOKEN cannot read {repo_id}@{revision}:{filename} ({exc.code})") from exc
 
     identity = request_json("https://huggingface.co/api/whoami-v2", token)
     namespace = PUBLICATION_REPO_ID.split("/", 1)[0]
@@ -115,7 +116,8 @@ def main() -> None:
     check_private_writable_repo(PUBLICATION_REPO_ID, token)
 
     print(
-        "Hugging Face preflight passed for the pinned LDA and Qwen inputs "
+        "Hugging Face preflight passed for the pinned LDA and Qwen inputs, "
+        "the pinned DINOv3 license, "
         f"and private writable repo {PUBLICATION_REPO_ID}"
     )
 

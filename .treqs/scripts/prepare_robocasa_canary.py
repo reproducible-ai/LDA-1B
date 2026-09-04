@@ -1,14 +1,14 @@
 """Download pinned model inputs and hash the committed demo dataset."""
+
 from __future__ import annotations
 
 import hashlib
 import json
 import os
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 from huggingface_hub import snapshot_download
-
 from lda_canary_contract import (
     ARTIFACT_ROOT,
     BASE_CHECKPOINT,
@@ -18,6 +18,9 @@ from lda_canary_contract import (
     BASE_SNAPSHOT,
     DATASET_PATH,
     DINO_CONFIG,
+    DINO_LICENSE,
+    DINO_LICENSE_NAME,
+    DINO_LICENSE_SHA256,
     DINO_MODEL_ID,
     DINO_MODEL_REVISION,
     DINO_PREPROCESSOR_CONFIG,
@@ -100,10 +103,17 @@ def main() -> None:
         destination=QWEN_SNAPSHOT,
         token=token,
     )
-    DINO_SNAPSHOT.mkdir(parents=True, exist_ok=True)
-    (DINO_SNAPSHOT / "config.json").write_text(
-        json.dumps(DINO_CONFIG, indent=2, sort_keys=True) + "\n"
+    download(
+        repo_id=DINO_MODEL_ID,
+        revision=DINO_MODEL_REVISION,
+        destination=DINO_SNAPSHOT,
+        token=token,
+        allow_patterns=[DINO_LICENSE_NAME],
     )
+    if sha256_file(DINO_LICENSE) != DINO_LICENSE_SHA256:
+        raise RuntimeError("Pinned DINOv3 license hash mismatch")
+    DINO_SNAPSHOT.mkdir(parents=True, exist_ok=True)
+    (DINO_SNAPSHOT / "config.json").write_text(json.dumps(DINO_CONFIG, indent=2, sort_keys=True) + "\n")
     (DINO_SNAPSHOT / "preprocessor_config.json").write_text(
         json.dumps(DINO_PREPROCESSOR_CONFIG, indent=2, sort_keys=True) + "\n"
     )
@@ -118,6 +128,7 @@ def main() -> None:
         BASE_CHECKPOINT,
         QWEN_SNAPSHOT / "config.json",
         DINO_SNAPSHOT / "config.json",
+        DINO_LICENSE,
     )
     missing = [str(path) for path in required if not path.is_file()]
     if missing:

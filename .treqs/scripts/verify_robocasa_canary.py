@@ -1,4 +1,5 @@
 """Verify the one-step checkpoint and prove an action tensor changed."""
+
 from __future__ import annotations
 
 import hashlib
@@ -6,7 +7,6 @@ import json
 from pathlib import Path
 
 import torch
-
 from lda_canary_contract import (
     BASE_CHECKPOINT,
     BASE_SNAPSHOT,
@@ -19,6 +19,8 @@ from lda_canary_contract import (
     TRAINED_CHECKPOINT,
 )
 
+from lda.model.checkpoint_loading import load_tensor_state_dict
+
 
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
@@ -29,26 +31,19 @@ def sha256_file(path: Path) -> str:
 
 
 def load_state(path: Path) -> dict[str, torch.Tensor]:
-    try:
-        return torch.load(path, map_location="cpu", weights_only=True, mmap=True)
-    except RuntimeError:
-        return torch.load(path, map_location="cpu", weights_only=True)
+    return load_tensor_state_dict(path)
 
 
 def verify_manifest_files(records: list[dict[str, object]], root: Path) -> None:
     expected = {str(record["path"]): record for record in records}
     actual = {
-        str(path.relative_to(root)): path
-        for path in root.rglob("*")
-        if path.is_file() and ".cache" not in path.parts
+        str(path.relative_to(root)): path for path in root.rglob("*") if path.is_file() and ".cache" not in path.parts
     }
     if set(expected) != set(actual):
         missing = sorted(set(expected) - set(actual))
         unexpected = sorted(set(actual) - set(expected))
-        raise RuntimeError(
-            f"Input manifest path mismatch under {root}; "
-            f"missing={missing[:5]}, unexpected={unexpected[:5]}"
-        )
+        details = f"missing={missing[:5]}, unexpected={unexpected[:5]}"
+        raise RuntimeError(f"Input manifest path mismatch under {root}; {details}")
     for relative_path, record in expected.items():
         path = actual[relative_path]
         if path.stat().st_size != record["size"]:
@@ -88,9 +83,7 @@ def main() -> None:
         raise RuntimeError(f"Expected global_step=1; found {global_step}")
     optimizer_steps_completed = summaries[-1].get("optimizer_steps_completed")
     if optimizer_steps_completed != 1:
-        raise RuntimeError(
-            f"Expected one completed optimizer step; found {optimizer_steps_completed}"
-        )
+        raise RuntimeError(f"Expected one completed optimizer step; found {optimizer_steps_completed}")
     trainable_parameters = set(summaries[-1].get("trainable_parameters") or [])
     if not trainable_parameters:
         raise RuntimeError("Training summary contains no trainable parameter names")
@@ -105,9 +98,7 @@ def main() -> None:
     if set(base_state) != set(trained_state):
         missing = sorted(set(base_state) - set(trained_state))
         unexpected = sorted(set(trained_state) - set(base_state))
-        raise RuntimeError(
-            f"Checkpoint key mismatch; missing={missing[:5]}, unexpected={unexpected[:5]}"
-        )
+        raise RuntimeError(f"Checkpoint key mismatch; missing={missing[:5]}, unexpected={unexpected[:5]}")
 
     for name, tensor in trained_state.items():
         if tensor.is_floating_point() and not torch.isfinite(tensor).all():

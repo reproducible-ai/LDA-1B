@@ -6,14 +6,23 @@ from pathlib import Path
 import pytest
 import torch
 
-
 ROOT = Path(__file__).resolve().parents[2]
 HELPERS_PATH = ROOT / "lda" / "model" / "checkpoint_loading.py"
+VERIFIER_PATH = ROOT / ".treqs" / "scripts" / "verify_robocasa_canary.py"
 
 
 def load_helpers():
     assert HELPERS_PATH.is_file(), "checkpoint loading helpers are missing"
     spec = importlib.util.spec_from_file_location("checkpoint_loading", HELPERS_PATH)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_verifier(monkeypatch):
+    monkeypatch.syspath_prepend(str(ROOT / ".treqs" / "scripts"))
+    spec = importlib.util.spec_from_file_location("verify_robocasa_canary", VERIFIER_PATH)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -62,6 +71,15 @@ def test_state_dict_loading_rejects_non_tensor_mappings(monkeypatch, tmp_path, p
 
     with pytest.raises(TypeError, match="string-keyed dictionary of tensors"):
         helpers.load_tensor_state_dict(tmp_path / "checkpoint.pt")
+
+
+def test_evaluation_loader_rejects_non_tensor_checkpoint(monkeypatch, tmp_path):
+    verifier = load_verifier(monkeypatch)
+    checkpoint = tmp_path / "invalid.pt"
+    torch.save({"weight": "not a tensor"}, checkpoint)
+
+    with pytest.raises(TypeError, match="string-keyed dictionary of tensors"):
+        verifier.load_state(checkpoint)
 
 
 def test_relative_resource_paths_resolve_from_release_root(tmp_path, monkeypatch):

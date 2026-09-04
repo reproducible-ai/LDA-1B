@@ -4,7 +4,10 @@ This private platform canary fine-tunes the pinned `Wayer2/LDA-robocasa` checkpo
 one optimizer step on LDA's four-episode committed demo dataset. The purpose is
 to verify TReqs orchestration, ROAR capture, GLaaS lineage, checkpoint
 verification, and private Hugging Face publication. It is not a campaign
-certification or model-quality claim.
+certification or model-quality claim. Campaign issue #5 was closed as not
+planned because its non-commercial license fails the campaign gate. This branch
+preserves private platform-canary code; it does not authorize compute or
+publication.
 
 ## Immutable inputs
 
@@ -14,7 +17,8 @@ certification or model-quality claim.
 - DINO encoder architecture: `facebook/dinov3-vits16-pretrain-lvd1689m@114c1379950215c8b35dfcd4e90a5c251dde0d32`; its weights are supplied by the strict-loaded LDA checkpoint
 - Dataset: `playground/demo_data/sim_pick_place` (four episodes, committed in source)
 - Compute target: `d557ec14-5941-4e42-9848-daff50e1ad9d` (4x NVIDIA L40S)
-- ROAR: `roar-cli==0.4.5`, preload tracer
+- ROAR: `roar-cli==0.4.5`, `huggingface-hub==0.36.0`, preload tracer
+- Build backend: `setuptools==80.9.0`
 - Required target secret: `HF_TOKEN`
 
 The Hugging Face token needs read access to the pinned public LDA and Qwen

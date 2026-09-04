@@ -240,3 +240,7 @@ examples/Robotwin/train_files/submit_robotwin_training.sh
 lda/dataloader/gr00t_lerobot/datasets_temp.py
 MUJOCO_LOG.TXT
 examples/MultiRobot/*
+
+# Private platform-canary runtime state and outputs
+/.roar/
+/artifacts/lda-robocasa-canary/

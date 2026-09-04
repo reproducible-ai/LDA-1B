@@ -6,54 +6,56 @@ setup:
   command: |
     set -euo pipefail
     export PATH="$(python3 -m site --user-base)/bin:${PATH}"
-    timeout --signal=TERM 90 python3 .treqs/scripts/check_hf_access.py
-    test "$(nvidia-smi --list-gpus | wc -l | tr -d ' ')" = "4"
-    timeout --signal=TERM 180 python3 -m pip install --user --disable-pip-version-check uv==0.12.3
+    timeout --signal=TERM --kill-after=30 90 python3 .treqs/scripts/check_hf_access.py
+    GPU_COUNT="$(timeout --signal=TERM --kill-after=30 30 nvidia-smi --list-gpus | wc -l | tr -d ' ')"
+    test "${GPU_COUNT}" = "4"
+    timeout --signal=TERM --kill-after=30 180 python3 -m pip install --user --disable-pip-version-check uv==0.12.3
     command -v uv >/dev/null
     rm -rf .venv
-    timeout --signal=TERM 180 uv venv --python 3.11 .venv
-    timeout --signal=TERM 3000 uv pip install --python .venv/bin/python -r requirements.txt
-    timeout --signal=TERM 180 uv pip install --python .venv/bin/python pytest==8.4.2 pyyaml==6.0.3
-    timeout --signal=TERM 180 uv pip install --python .venv/bin/python --no-deps -e .
-    uv tool install --python 3.11 --force --with 'huggingface-hub==0.36.0' roar-cli==0.4.5
+    timeout --signal=TERM --kill-after=30 180 uv venv --python 3.11 .venv
+    timeout --signal=TERM --kill-after=30 3000 uv pip install --python .venv/bin/python -r requirements.txt
+    timeout --signal=TERM --kill-after=30 180 uv pip install --python .venv/bin/python pytest==8.4.2 pyyaml==6.0.3
+    timeout --signal=TERM --kill-after=30 180 uv pip install --python .venv/bin/python --no-deps -e .
+    timeout --signal=TERM --kill-after=30 300 uv tool install --python 3.11 --force --with 'huggingface-hub==0.36.0' roar-cli==0.4.5
     if command -v sudo >/dev/null 2>&1; then
       sudo -n ln -sf "$(command -v roar)" /usr/local/bin/roar
     else
       ln -sf "$(command -v roar)" /usr/local/bin/roar
     fi
-    test "$(env PATH=/usr/local/bin:/usr/bin:/bin roar --version)" = "roar, version 0.4.5"
-    roar tracer use preload
-    roar tracer
-    roar init || true
-    timeout --signal=TERM 180 .venv/bin/python -m pytest -q tests/treqs/test_lda_robocasa_canary_contract.py
+    ROAR_VERSION="$(timeout --signal=TERM --kill-after=30 60 env PATH=/usr/local/bin:/usr/bin:/bin roar --version)"
+    test "${ROAR_VERSION}" = "roar, version 0.4.5"
+    timeout --signal=TERM --kill-after=30 60 roar tracer use preload
+    timeout --signal=TERM --kill-after=30 60 roar tracer
+    timeout --signal=TERM --kill-after=30 60 roar init --no-gitignore
+    timeout --signal=TERM --kill-after=30 180 .venv/bin/python -m pytest -q tests/treqs
   trace: "off"
 
 fetch:
   command: |
     set -euo pipefail
     export PATH="$PWD/.venv/bin:/usr/local/bin:/opt/pytorch/bin:$PATH"
-    roar run -n fetch -- env PYTHONUNBUFFERED=1 HF_HOME=/tmp/lda-robocasa-hf timeout --signal=TERM 5400 python .treqs/scripts/prepare_robocasa_canary.py
+    timeout --signal=TERM --kill-after=30 5400 roar run -n fetch -- env PYTHONUNBUFFERED=1 HF_HOME=/tmp/lda-robocasa-hf python .treqs/scripts/prepare_robocasa_canary.py
   trace: "off"
 
 train:
   command: |
     set -euo pipefail
     export PATH="$PWD/.venv/bin:/usr/local/bin:/opt/pytorch/bin:$PATH"
-    roar run -n train -- env PYTHONUNBUFFERED=1 HF_HOME=/tmp/lda-robocasa-hf WANDB_MODE=disabled timeout --signal=TERM 3600 python .treqs/scripts/run_robocasa_canary.py
+    timeout --signal=TERM --kill-after=30 3600 roar run -n train -- env PYTHONUNBUFFERED=1 HF_HOME=/tmp/lda-robocasa-hf WANDB_MODE=disabled python .treqs/scripts/run_robocasa_canary.py
   trace: "off"
 
 evaluate:
   command: |
     set -euo pipefail
     export PATH="$PWD/.venv/bin:/usr/local/bin:/opt/pytorch/bin:$PATH"
-    roar run -n evaluate -- env PYTHONUNBUFFERED=1 timeout --signal=TERM 1800 python .treqs/scripts/verify_robocasa_canary.py
+    timeout --signal=TERM --kill-after=30 1800 roar run -n evaluate -- env PYTHONUNBUFFERED=1 python .treqs/scripts/verify_robocasa_canary.py
   trace: "off"
 
 package:
   command: |
     set -euo pipefail
     export PATH="$PWD/.venv/bin:/usr/local/bin:/opt/pytorch/bin:$PATH"
-    roar run -n package -- env PYTHONUNBUFFERED=1 timeout --signal=TERM 600 python .treqs/scripts/package_robocasa_canary.py
+    timeout --signal=TERM --kill-after=30 600 roar run -n package -- env PYTHONUNBUFFERED=1 python .treqs/scripts/package_robocasa_canary.py
   trace: "off"
 
 label:
@@ -63,7 +65,7 @@ label:
     SOURCE_COMMIT="$(git rev-parse HEAD)"
     MODEL=artifacts/lda-robocasa-canary/release/checkpoints/LDA-robocasa-treqs-canary.pt
     test -s "$MODEL"
-    roar label set artifact "$MODEL" model.name=lda-robocasa-demo-canary model.version=0.0.1 license.id=CC-BY-NC-4.0 license.name='Creative Commons Attribution-NonCommercial 4.0' description='LDA RoboCasa one-step TReqs fine-tuning canary' documentation.url="https://github.com/reproducible-ai/LDA-1B/blob/${SOURCE_COMMIT}/.treqs/README.md"
+    timeout --signal=TERM --kill-after=30 180 roar label set artifact "$MODEL" model.name=lda-robocasa-demo-canary model.version=0.0.1 license.id=CC-BY-NC-4.0 license.name='Creative Commons Attribution-NonCommercial 4.0' description='LDA RoboCasa one-step TReqs fine-tuning canary' documentation.url="https://github.com/reproducible-ai/LDA-1B/blob/${SOURCE_COMMIT}/.treqs/README.md"
   trace: "off"
 
 publish:
@@ -76,7 +78,7 @@ publish:
       test -s "$RELEASE/$document"
     done
     test -s "$RELEASE/checkpoints/LDA-robocasa-treqs-canary.pt"
-    roar status --untracked-dirs
-    roar put "$RELEASE/README.md" "$RELEASE/LICENSE" "$RELEASE/NOTICE" hf://reproducible-ai/harness-test-lda-robocasa-issue-5 --private --yes --no-tag -m "LDA RoboCasa canary model card and notices"
-    roar put "$RELEASE" hf://reproducible-ai/harness-test-lda-robocasa-issue-5/robocasa-demo-canary-0.0.1 --private --yes --no-tag -m "LDA RoboCasa one-step TReqs reproducibility canary"
+    timeout --signal=TERM --kill-after=30 180 roar status --untracked-dirs
+    timeout --signal=TERM --kill-after=30 1800 roar put "$RELEASE/README.md" "$RELEASE/LICENSE" "$RELEASE/NOTICE" hf://reproducible-ai/harness-test-lda-robocasa-issue-5 --private --yes --no-tag -m "LDA RoboCasa canary model card and notices"
+    timeout --signal=TERM --kill-after=30 1800 roar put "$RELEASE" hf://reproducible-ai/harness-test-lda-robocasa-issue-5/robocasa-demo-canary-0.0.1 --private --yes --no-tag -m "LDA RoboCasa one-step TReqs reproducibility canary"
   trace: "off"

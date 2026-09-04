@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 from pathlib import Path
 
 import yaml
-
 
 ROOT = Path(__file__).resolve().parents[2]
 TREQS = ROOT / ".treqs"
@@ -37,11 +37,15 @@ def test_inputs_and_private_publication_are_immutable():
     assert contract.DINO_MODEL_REVISION == "114c1379950215c8b35dfcd4e90a5c251dde0d32"
     assert contract.DATASET_PATH == ROOT / "playground" / "demo_data" / "sim_pick_place"
     assert contract.EXPECTED_EPISODES == 4
-    assert (
-        contract.PUBLICATION_REPO_ID
-        == "reproducible-ai/harness-test-lda-robocasa-issue-5"
-    )
+    assert contract.PUBLICATION_REPO_ID == "reproducible-ai/harness-test-lda-robocasa-issue-5"
     assert contract.PUBLICATION_VERSION == "robocasa-demo-canary-0.0.1"
+
+
+def test_build_backend_is_pinned():
+    pyproject = (ROOT / "pyproject.toml").read_text()
+
+    assert 'requires = ["setuptools==80.9.0"]' in pyproject
+    assert 'build-backend = "setuptools.build_meta"' in pyproject
 
 
 def test_workflow_is_one_clean_lineage_dag():
@@ -54,6 +58,7 @@ def test_workflow_is_one_clean_lineage_dag():
     assert setup.index("check_hf_access.py") < setup.index("pip install")
     assert "--with 'huggingface-hub==0.36.0'" in setup
     assert "--with huggingface-hub " not in setup
+    assert any(line.strip().endswith(".venv/bin/python -m pytest -q tests/treqs") for line in setup.splitlines())
     for stage in stages:
         assert workflow[stage]["trace"] == "off"
     for stage in stages[:4]:
@@ -64,14 +69,77 @@ def test_workflow_is_one_clean_lineage_dag():
     assert workflow["publish"]["glaas_creds"] is True
     publish = workflow["publish"]["command"]
     assert "roar put" in publish
-    assert (
-        "hf://reproducible-ai/harness-test-lda-robocasa-issue-5/"
-        "robocasa-demo-canary-0.0.1"
-    ) in publish
+    assert ("hf://reproducible-ai/harness-test-lda-robocasa-issue-5/robocasa-demo-canary-0.0.1") in publish
     assert "--private --yes --no-tag" in publish
     assert "--public" not in publish
     assert "hf upload" not in publish
     assert "huggingface-cli upload" not in publish
+
+
+def test_workflow_hard_bounds_external_operations():
+    workflow = load_workflow()
+    hard_timeout = "timeout --signal=TERM --kill-after=30"
+    commands = "\n".join(
+        stage["command"] for stage in workflow.values() if isinstance(stage, dict) and "command" in stage
+    )
+
+    for line in commands.splitlines():
+        if "timeout " in line:
+            assert hard_timeout in line
+
+    setup = workflow["setup"]["command"]
+    assert f"{hard_timeout} 300 uv tool install" in setup
+    assert f"{hard_timeout} 60 roar tracer use preload" in setup
+    assert f"{hard_timeout} 60 roar tracer" in setup
+    assert f"{hard_timeout} 60 roar init --no-gitignore" in setup
+    assert "roar init || true" not in setup
+    assert 'test "$(timeout' not in setup
+    assert f"GPU_COUNT=\"$({hard_timeout} 30 nvidia-smi --list-gpus | wc -l | tr -d ' ')\"" in setup
+    assert 'test "${GPU_COUNT}" = "4"' in setup
+    assert f'ROAR_VERSION="$({hard_timeout} 60 env PATH=/usr/local/bin:/usr/bin:/bin roar --version)"' in setup
+    assert 'test "${ROAR_VERSION}" = "roar, version 0.4.5"' in setup
+
+    stage_timeouts = {
+        "fetch": 5400,
+        "train": 3600,
+        "evaluate": 1800,
+        "package": 600,
+    }
+    for stage, seconds in stage_timeouts.items():
+        command = workflow[stage]["command"]
+        assert f"{hard_timeout} {seconds} roar run -n {stage} -- env" in command
+        assert "roar run" not in command.split("timeout", 1)[0]
+
+    assert f"{hard_timeout} 180 roar label set" in workflow["label"]["command"]
+    publish_lines = workflow["publish"]["command"].splitlines()
+    assert any(f"{hard_timeout} 180 roar status --untracked-dirs" in line for line in publish_lines)
+    assert sum(f"{hard_timeout} 1800 roar put" in line for line in publish_lines) == 2
+
+
+def test_workflow_stage_commands_are_valid_bash():
+    workflow = load_workflow()
+
+    for stage, config in workflow.items():
+        if not isinstance(config, dict) or "command" not in config:
+            continue
+        result = subprocess.run(
+            ["bash", "-n"],
+            input=config["command"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 0, f"{stage}: {result.stderr}"
+
+
+def test_runtime_state_and_outputs_do_not_dirty_source_tree():
+    for path in (".roar/probe", "artifacts/lda-robocasa-canary/probe"):
+        result = subprocess.run(
+            ["git", "check-ignore", "--no-index", "--quiet", "--", path],
+            cwd=ROOT,
+            check=False,
+        )
+        assert result.returncode == 0, f"workflow-generated path is not ignored: {path}"
 
 
 def test_training_is_bounded_to_one_step_on_four_gpus():
@@ -111,7 +179,8 @@ def test_preparation_hashes_the_repo_demo_and_pins_hub_downloads():
 def test_evaluation_proves_a_real_updated_checkpoint():
     verify = (SCRIPTS / "verify_robocasa_canary.py").read_text()
     trainer = (ROOT / "lda" / "training" / "train_LDA.py").read_text()
-    assert "torch.load" in verify
+    assert "load_tensor_state_dict(path)" in verify
+    assert "torch.load" not in verify
     assert "summary.jsonl" in verify
     assert "base_sha256" in verify
     assert "checkpoint_sha256" in verify
@@ -150,6 +219,9 @@ def test_package_is_loader_compatible_and_documents_scope():
     assert "one optimizer step" in card.lower()
     assert "not a quality" in card.lower()
     assert "download qwen normally" not in card.lower()
+    readme = " ".join((TREQS / "README.md").read_text().lower().split())
+    assert "closed as not planned" in readme
+    assert "does not authorize compute or publication" in readme
 
 
 def test_hf_preflight_requires_existing_private_writable_repo():
@@ -164,19 +236,10 @@ def test_hf_preflight_requires_existing_private_writable_repo():
 def test_dino_architecture_can_be_built_without_gated_weight_download():
     framework = (ROOT / "lda" / "model" / "framework" / "QwenMMDiT.py").read_text()
     assert "action_model.MMDiT_ActionHeader import" in framework
-    action_head = (
-        ROOT
-        / "lda"
-        / "model"
-        / "modules"
-        / "action_model"
-        / "MMDiT_ActionHeader.py"
-    ).read_text()
+    action_head = (ROOT / "lda" / "model" / "modules" / "action_model" / "MMDiT_ActionHeader.py").read_text()
     runner = (SCRIPTS / "run_robocasa_canary.py").read_text()
     trainer = (ROOT / "lda" / "training" / "train_LDA.py").read_text()
-    tools = (
-        ROOT / "lda" / "training" / "trainer_utils" / "trainer_tools.py"
-    ).read_text()
+    tools = (ROOT / "lda" / "training" / "trainer_utils" / "trainer_tools.py").read_text()
     prepare = (SCRIPTS / "prepare_robocasa_canary.py").read_text()
     preflight = (SCRIPTS / "check_hf_access.py").read_text()
 

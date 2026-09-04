@@ -219,6 +219,9 @@ class VLATrainer(TrainerUtils):
         # 获取预训练检查点和是否恢复训练的标志
         pretrained_checkpoint = getattr(self.config.trainer, "pretrained_checkpoint", None)
         is_resume = getattr(self.config.trainer, "is_resume", False)
+        strict_pretrained_checkpoint = getattr(
+            self.config.trainer, "strict_pretrained_checkpoint", False
+        )
         self.resume_from_checkpoint = pretrained_checkpoint
         # TODO retinking resume and load from pretrained_checkpoint
         if is_resume:
@@ -227,7 +230,12 @@ class VLATrainer(TrainerUtils):
             
             if resume_from_checkpoint:
                 self.resume_from_checkpoint = resume_from_checkpoint
-                self.model = self.load_pretrained_backbones(self.model, self.resume_from_checkpoint, reload_modules=None)
+                self.model = self.load_pretrained_backbones(
+                    self.model,
+                    self.resume_from_checkpoint,
+                    reload_modules=None,
+                    strict=strict_pretrained_checkpoint,
+                )
                 logger.info(f"Resuming training from checkpoint: {self.resume_from_checkpoint}, steps: {self.completed_steps}")
                 return None
             else:
@@ -237,7 +245,12 @@ class VLATrainer(TrainerUtils):
         # 加载预训练权重
         if pretrained_checkpoint:
             reload_modules = getattr(self.config.trainer, "reload_modules", None)
-            self.model = self.load_pretrained_backbones(self.model, pretrained_checkpoint, reload_modules=reload_modules)
+            self.model = self.load_pretrained_backbones(
+                self.model,
+                pretrained_checkpoint,
+                reload_modules=reload_modules,
+                strict=strict_pretrained_checkpoint,
+            )
             try:
                 self.completed_steps = int(re.search(r"steps_(\d+)_pytorch_model\.pt", pretrained_checkpoint).group(1))
             except AttributeError:
@@ -266,8 +279,15 @@ class VLATrainer(TrainerUtils):
             torch.save(state_dict, checkpoint_path + "_pytorch_model.pt")
 
             # save training metadata
+            unwrapped_model = self.accelerator.unwrap_model(self.model)
+            trainable_parameters = sorted(
+                name for name, parameter in unwrapped_model.named_parameters()
+                if parameter.requires_grad
+            )
             summary_data = {
                 "steps": self.completed_steps,
+                "optimizer_steps_completed": self.completed_steps,
+                "trainable_parameters": trainable_parameters,
             }
             with open(os.path.join(self.config.output_dir, "summary.jsonl"), "a") as f:
                 f.write(json.dumps(summary_data) + "\n")

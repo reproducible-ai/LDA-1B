@@ -80,12 +80,20 @@ def build_multi_task_dataloader(cfg, dataset_py="lerobot_datasets_oxe", num_work
         # Use a single dataloader with a task-aware batch sampler to:
         # 1) guarantee task coverage inside each batch
         # 2) reduce duplicated worker/prefetch memory overhead
-        task_weights = cfg.datasets.vla_data.get("training_task_weights", [1.0] * len(TRAINING_TASKS))
+        training_tasks = cfg.datasets.vla_data.get("training_tasks", TRAINING_TASKS)
+        task_weights = cfg.datasets.vla_data.get(
+            "training_task_weights", [1.0] * len(training_tasks)
+        )
+        unsupported_tasks = sorted(set(training_tasks) - set(TRAINING_TASKS))
+        if unsupported_tasks:
+            raise ValueError(f"Unsupported training tasks: {unsupported_tasks}")
+        if len(task_weights) != len(training_tasks):
+            raise ValueError("training_task_weights must match training_tasks length")
         sampler = DistributedTaskBatchSampler(
             all_dataset,
             batch_size=cfg.datasets.vla_data.per_device_batch_size,
-            tasks=TRAINING_TASKS,
-            task_weights=dict(zip(TRAINING_TASKS, task_weights)),
+            tasks=training_tasks,
+            task_weights=dict(zip(training_tasks, task_weights)),
             seed=cfg.seed,
             drop_last=True,
         )

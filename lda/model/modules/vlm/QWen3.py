@@ -53,13 +53,16 @@ class _QWen3_VL_Interface(nn.Module):
 
         qwenvl_config = config.framework.get("qwenvl", {})
         model_id = qwenvl_config.get("base_vlm", "Qwen/Qwen3-VL-4B-Instruct")
+        revision = qwenvl_config.get("revision")
+        attn_implementation = qwenvl_config.get("attn_implementation", "flash_attention_2")
 
         model = Qwen3VLForConditionalGeneration.from_pretrained(
             model_id,
-            attn_implementation="flash_attention_2",
+            revision=revision,
+            attn_implementation=attn_implementation,
             dtype=torch.bfloat16,
         )
-        processor = AutoProcessor.from_pretrained(model_id)
+        processor = AutoProcessor.from_pretrained(model_id, revision=revision)
         processor.tokenizer.padding_side = "left"
 
         self.model = model

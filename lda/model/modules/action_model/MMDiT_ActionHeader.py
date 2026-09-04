@@ -27,7 +27,7 @@ from lda.model.modules.action_model.flow_matching_head.action_encoder import (
 )
 
 from lda.model.modules.action_model.flow_matching_head.mmdit.mmdit.mmdit_cross_attn import MMDiT as DiT
-from lda.model.modules.dinov3_vit import DINOv3ViTModel
+from lda.model.modules.dinov3_vit import DINOv3ViTConfig, DINOv3ViTModel
 from lda.model.modules.action_model.UWM.transforms import VAEDownsample, VideoTransform
 
 TRAINING_TASKS = ["policy", "forward_dynamics", "inverse_dynamics", "video_gen"]
@@ -419,7 +419,11 @@ class FlowmatchingActionHead(nn.Module):
         if self.vision_encoder_type == "dinov3":
             pretrained_model_name = os.path.join(config.vision_encoder_path, f'dinov3-vit{self.vision_encoder_size}16-pretrain-lvd1689m')
             self.transform = AutoImageProcessor.from_pretrained(pretrained_model_name)
-            self.vision_encoder = DINOv3ViTModel.from_pretrained(pretrained_model_name).eval()
+            if getattr(config, "vision_encoder_load_weights", True):
+                self.vision_encoder = DINOv3ViTModel.from_pretrained(pretrained_model_name).eval()
+            else:
+                dino_config = DINOv3ViTConfig.from_pretrained(pretrained_model_name)
+                self.vision_encoder = DINOv3ViTModel(dino_config).eval()
             self.obs_horizon = config.obs_horizon
             self.cls_token = 1
             register_tokens = self.vision_encoder.config.num_register_tokens

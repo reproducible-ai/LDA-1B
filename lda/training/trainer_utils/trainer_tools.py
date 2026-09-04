@@ -13,6 +13,8 @@ import torch
 
 from accelerate.logging import get_logger
 
+from lda.model.checkpoint_loading import load_tensor_state_dict
+
 logger = get_logger(__name__)
 
 
@@ -209,7 +211,7 @@ class TrainerUtils:
         return num_params, num_trainable_params
 
     @staticmethod
-    def load_pretrained_backbones(model, checkpoint_path=None, reload_modules=None):
+    def load_pretrained_backbones(model, checkpoint_path=None, reload_modules=None, strict=False):
         """
         load checkpoint:
         - if reload_modules is set, load by path part
@@ -223,7 +225,7 @@ class TrainerUtils:
         if dist.get_rank() == 0:
             print(f"📦 loading checkpoint: {checkpoint_path}")
         try:
-            checkpoint = torch.load(checkpoint_path, map_location="cpu")
+            checkpoint = load_tensor_state_dict(checkpoint_path)
         except Exception as e:
             raise RuntimeError(f"❌ loading checkpoint failed: {e}")
 
@@ -250,7 +252,7 @@ class TrainerUtils:
                     print(f"❌ cannot find module path: {path}")
         else:  # full load
             try:
-                model.load_state_dict(checkpoint, strict=False)
+                model.load_state_dict(checkpoint, strict=strict)
                 if dist.get_rank() == 0:
                     print("✅ loaded <full_model> model parameters")
                 loaded_modules = ["<full_model>"]

@@ -22,6 +22,10 @@ from typing import Dict, List
 from transformers import AutoConfig, AutoModel, PretrainedConfig, PreTrainedModel
 import numpy as np
 from lda.model.tools import auto_get_trainable_modules
+from lda.model.checkpoint_loading import (
+    load_tensor_state_dict,
+    resolve_checkpoint_resource_path,
+)
 
 from lda.model.framework.share_tools import read_mode_config
 from lda.training.trainer_utils import initialize_overwatch
@@ -80,18 +84,26 @@ class baseframework(PreTrainedModel):
             RuntimeError: If state_dict key mismatch occurs under strict=True.
             FileNotFoundError: If underlying files are missing (surfaced earlier).
         """
-        pretrained_checkpoint = Path(pretrained_checkpoint)
+        pretrained_checkpoint = Path(pretrained_checkpoint).absolute()
         model_config, norm_stats = read_mode_config(pretrained_checkpoint)  # read config and norm_stats
 
         config = dict_to_namespace(model_config)
         model_config = config
+        vision_encoder_path = model_config.framework.action_model.get("vision_encoder_path")
+        if vision_encoder_path:
+            model_config.framework.action_model.vision_encoder_path = (
+                resolve_checkpoint_resource_path(
+                    vision_encoder_path,
+                    pretrained_checkpoint,
+                )
+            )
         model_config.trainer.pretrained_checkpoint = None
         # FrameworkModel = cls(config=model_config, **kwargs) # TODO find cls by config
         FrameworkModel = build_framework(cfg=model_config)
         # set for action un-norm
         FrameworkModel.norm_stats = norm_stats
         # Load from Checkpoint (Custom --> should load both *projector* and *llm* weights)
-        model_state_dict = torch.load(pretrained_checkpoint, map_location="cpu")
+        model_state_dict = load_tensor_state_dict(pretrained_checkpoint)
         # logger.info(f"Loading model weights from `{pretrained_checkpoint}`")
         model_keys = set(FrameworkModel.state_dict().keys())
         checkpoint_keys = set(model_state_dict.keys())

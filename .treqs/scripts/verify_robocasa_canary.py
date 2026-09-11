@@ -127,6 +127,7 @@ def main() -> None:
         "schema_version": 1,
         "status": "passed",
         "inputs_verified": True,
+        "loadVerified": True,
         "global_step": global_step,
         "optimizer_steps_completed": optimizer_steps_completed,
         "base_checkpoint": {

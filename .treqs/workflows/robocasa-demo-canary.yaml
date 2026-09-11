@@ -8,7 +8,7 @@ setup:
     export PATH="$(python3 -m site --user-base)/bin:${PATH}"
     timeout --signal=TERM --kill-after=30 90 python3 .treqs/scripts/check_hf_access.py
     GPU_COUNT="$(timeout --signal=TERM --kill-after=30 30 nvidia-smi --list-gpus | wc -l | tr -d ' ')"
-    test "${GPU_COUNT}" = "4"
+    test "${GPU_COUNT}" = "1"
     timeout --signal=TERM --kill-after=30 180 python3 -m pip install --user --disable-pip-version-check uv==0.12.3
     command -v uv >/dev/null
     rm -rf .venv
@@ -75,11 +75,11 @@ publish:
     export PATH="$PWD/.venv/bin:/usr/local/bin:/opt/pytorch/bin:$PATH"
     RELEASE=artifacts/lda-robocasa-canary/release
     for document in README.md LICENSE CC-BY-NC-4.0.md APACHE-2.0.txt DINOv3-LICENSE.md NOTICE evaluation.json input-manifest.json publication.json; do
-      test -s "$RELEASE/$document"
+      test -s "$RELEASE/checkpoints/loader/$document"
     done
     test -s "$RELEASE/checkpoints/LDA-robocasa-treqs-canary.pt"
     timeout --signal=TERM --kill-after=30 180 roar status --untracked-dirs
     test -s "$RELEASE/checkpoints/artifact-manifest.json"
     test -s "$RELEASE/checkpoints/result.json"
-    roar put artifacts/lda-robocasa-canary/release/checkpoints/LDA-robocasa-treqs-canary.pt artifacts/lda-robocasa-canary/release/checkpoints/artifact-manifest.json artifacts/lda-robocasa-canary/release/checkpoints/result.json --private --yes --no-tag -m "private reproducibility canary" hf://reproducible-ai/stage-lda-1b-robocasa-aa979fa0c66d/artifacts/lda-robocasa-canary/release/checkpoints
+    roar put artifacts/lda-robocasa-canary/release/checkpoints --private --yes --no-tag -m "private reproducibility canary" hf://reproducible-ai/stage-lda-1b-robocasa-c82c257858b1/artifacts/lda-robocasa-canary/release/checkpoints
   trace: "off"

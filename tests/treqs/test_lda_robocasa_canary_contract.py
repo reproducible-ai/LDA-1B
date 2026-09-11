@@ -79,11 +79,8 @@ def test_workflow_is_one_clean_lineage_dag():
     assert args[-1].endswith("/artifacts/lda-robocasa-canary/release/checkpoints")
     assert args.count("-m") == 1 and args[args.index("-m") + 1].strip()
     assert args[:2] == ["roar", "put"]
-    assert args[2:5] == [
-        "artifacts/lda-robocasa-canary/release/checkpoints/" + name
-        for name in ("LDA-robocasa-treqs-canary.pt", "artifact-manifest.json", "result.json")
-    ]
-    assert args[5:-1] == ["--private", "--yes", "--no-tag", "-m", "private reproducibility canary"]
+    assert args[2] == "artifacts/lda-robocasa-canary/release/checkpoints"
+    assert args[3:-1] == ["--private", "--yes", "--no-tag", "-m", "private reproducibility canary"]
     assert "--anonymous" not in args
     assert "--private --yes --no-tag" in publish
     assert "--public" not in publish
@@ -110,7 +107,7 @@ def test_workflow_hard_bounds_external_operations():
     assert "roar init || true" not in setup
     assert 'test "$(timeout' not in setup
     assert f"GPU_COUNT=\"$({hard_timeout} 30 nvidia-smi --list-gpus | wc -l | tr -d ' ')\"" in setup
-    assert 'test "${GPU_COUNT}" = "4"' in setup
+    assert 'test "${GPU_COUNT}" = "1"' in setup
     assert f'ROAR_VERSION="$({hard_timeout} 60 env PATH=/usr/local/bin:/usr/bin:/bin roar --version)"' in setup
     assert 'test "${ROAR_VERSION}" = "roar, version 0.4.5"' in setup
 
@@ -129,7 +126,7 @@ def test_workflow_hard_bounds_external_operations():
     assert f"{hard_timeout} 180 roar label set" in workflow["label"]["command"]
     publish_lines = workflow["publish"]["command"].splitlines()
     assert any(f"{hard_timeout} 180 roar status --untracked-dirs" in line for line in publish_lines)
-    assert sum(line.startswith("roar put artifacts/lda-robocasa-canary/release/checkpoints/LDA-robocasa-treqs-canary.pt ") for line in publish_lines) == 1
+    assert sum(line.startswith("roar put artifacts/lda-robocasa-canary/release/checkpoints ") for line in publish_lines) == 1
 
 
 def test_workflow_stage_commands_are_valid_bash():
@@ -158,16 +155,16 @@ def test_runtime_state_and_outputs_do_not_dirty_source_tree():
         assert result.returncode == 0, f"workflow-generated path is not ignored: {path}"
 
 
-def test_training_is_bounded_to_one_step_on_four_gpus():
+def test_training_is_bounded_to_one_step_on_one_gpu():
     workflow = load_workflow()
     train = workflow["train"]["command"]
     assert "run_robocasa_canary.py" in train
     runner = (SCRIPTS / "run_robocasa_canary.py").read_text()
-    assert '"--num_processes", "4"' in runner
+    assert '"--num_processes", "1"' in runner
     assert '"--trainer.max_train_steps", "1"' in runner
     assert '"--trainer.save_interval", "1"' in runner
     assert '"--datasets.vla_data.data_mix", "demo_data"' in runner
-    assert '"--datasets.vla_data.per_device_batch_size", "1"' in runner
+    assert '"--datasets.vla_data.per_device_batch_size", "4"' in runner
     assert '"--datasets.vla_data.training_tasks", \'["policy"]\'' in runner
     assert '"--datasets.vla_data.training_task_weights", "[1.0]"' in runner
     assert '"--framework.action_model.only_policy", "true"' in runner
@@ -332,9 +329,15 @@ def test_qwen_wrapper_honors_configured_attention_backend():
 def test_deepspeed_config_offloads_optimizer_and_gathers_checkpoint():
     config = yaml.safe_load((ASSETS / "accelerate-zero2-cpu.yaml").read_text())
     assert config["distributed_type"] == "DEEPSPEED"
-    assert config["num_processes"] == 4
+    assert config["num_processes"] == 1
     ds_path = ROOT / config["deepspeed_config"]["deepspeed_config_file"]
     ds = yaml.safe_load(ds_path.read_text())
     assert ds["zero_optimization"]["stage"] == 2
     assert ds["zero_optimization"]["offload_optimizer"]["device"] == "cpu"
     assert ds["train_micro_batch_size_per_gpu"] == "auto"
+
+
+def test_dependency_free_candidate_contracts():
+    import sys
+    subprocess.run([sys.executable, str(SCRIPTS / "check_local_candidate.py")],
+                   cwd=ROOT, check=True)

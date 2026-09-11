@@ -89,3 +89,65 @@ references; ls -a; workspace-only Python edits; python3
 git diff --check. AGENTS.md search returned no matches. No training parameters
 changed; the canary overrides documented above remain in place. The supervisor
 must enforce the $15 budget and arrange independent verification after execution.
+
+## Capacity-fallback task packet, attempt c82c2578, iteration 1
+
+This section records the current workspace iteration and corrects inherited notes
+above. No external actions, training, credentials, publication, or independent
+audit were performed. The remote artifact does not yet exist in this attempt.
+
+- `blackwell-capacity`: Verified source mismatch: runner, launcher, and setup
+  required four GPUs; requirements pinned torch 2.6 and CUDA 12.4 packages.
+  Updated all three to one GPU, per-device batch four, accumulation one, BF16,
+  preserving ZeRO-2 CPU optimizer offload. Runtime rejects wrong count, memory
+  below 90 GiB, wrong model/compute capability, and wrong torch/CUDA versions.
+  Requirements use torch 2.9.0+cu128, torchvision 0.24.0+cu128, torchcodec 0.8.1,
+  sympy 1.14.0 and triton 3.5.0; CUDA transitive requirements are resolved from
+  the pinned torch wheel, with stale explicit CUDA pins removed. Dependency
+  installation and actual Blackwell compatibility remain remotely unverified.
+- `structured-receipts-v1` supersedes `receipt-markers`: verified old markers
+  emitted paths, old inventory used size/schema_version and included result.json.
+  Writer now emits JSON objects with v1 schemas, sizeBytes, checkpoint-relative
+  inventories, actual hashes and exact result.json equality. It excludes both
+  receipts from inventory and rejects absent load verification or hash mismatch.
+  The verifier sets loadVerified only after loading/checking both states.
+- `physical-private-package` supersedes `publication-exact-files`: current supplied
+  contract explicitly permits the common parent directory. Publish that directory
+  with all supporting files physically under loader/, plus state dict and receipts.
+  Replaced stale destination with harness-test-pending; tests allow supervisor
+  repository replacement. Exactly one private roar put, destination last.
+- `physical-loader-resources` supersedes `supporting-file-preservation`: physical
+  loader files replace hex embedding; checkpoint-relative hashes inventory every
+  published non-receipt file. Documentation explains restoring original loader
+  layout from loader/ plus the published checkpoint. Package retains input hashes,
+  pinned architecture, statistics, all notices and upstream model cards.
+- `local-validation-fallback` supersedes `current-validation-limit`: Python lacks
+  pytest; the first offline uv invocation was denied access to its default cache;
+  a workspace-cache retry confirmed pytest is not cached. Full pytest was not run.
+  Dependency-free checks passed including real receipt code on synthetic files,
+  repeat writes, negative load/hash/step gates, bash syntax, publication contract,
+  repository substitution, and actual runner functions with mocked CUDA/processes.
+  Full pytest remains in remote setup before fetch. No model quality is inferred.
+- `remote-runtime-unknown`: one-device memory fit and actual optimizer update are
+  unverified hypotheses, cause null. Supervisor must enforce NTE $15, schedule the
+  single specified GPU, and independently verify the private artifact afterwards.
+
+Current parameter deviations against committed lda/config/training/LDA_robocasa.yaml:
+100000 steps -> 1; batch/device 16 -> 4 (inherited canary 1 -> 4 as GPU count 4 -> 1);
+warmup 5000 -> 0; base/action learning rates 1e-5/1e-4 -> 1e-6/1e-6; diffusion
+repeats 4 -> 1; save interval 5000 -> 1; eval interval 100 -> 1000; logging 10 -> 1;
+unfrozen modules -> frozen Qwen/DINO; multi-task/full data -> four demo episodes,
+policy only; Flash Attention 2 -> SDPA. Accumulation stays one. Runtime starts from
+the pinned checkpoint config, not an inspected remote recipe. None restores a full
+run or establishes hardware equivalence. Software deviations are listed above.
+
+Commands actually run this iteration: pwd; rg --files and rg -n workspace searches;
+git status --short; cat/sed reads of workflow, scripts, requirements, tests, model
+card, notes and committed recipe; workspace Python edit scripts; git diff --stat;
+python3 -c 'import pytest,yaml,torch; print(torch.__version__)' (failed: no pytest);
+uv run --offline --no-project --with pytest==8.4.2 --with pyyaml==6.0.3 --with torch
+python -m pytest -q tests/treqs (failed cache permission); same command prefixed
+UV_CACHE_DIR=.local-check-cache (failed offline cache miss);
+python3 .treqs/scripts/check_local_candidate.py (passed; repeated after changes,
+final stdout in .treqs/local-check-results.txt); git diff --check (passed).
+No commit was created. No AGENTS.md files were found by workspace search.

@@ -1,4 +1,4 @@
-"""Launch the bounded four-GPU LDA fine-tuning canary."""
+"""Launch the bounded single-GPU LDA fine-tuning canary."""
 from __future__ import annotations
 
 import os
@@ -19,12 +19,16 @@ from lda_canary_contract import (
 
 
 def validate_runtime() -> None:
-    if torch.cuda.device_count() != 4:
-        raise RuntimeError(f"Expected exactly four CUDA GPUs; found {torch.cuda.device_count()}")
-    for index in range(4):
+    if torch.cuda.device_count() != 1:
+        raise RuntimeError(f"Expected exactly one CUDA GPU; found {torch.cuda.device_count()}")
+    if torch.version.cuda != "12.8" or str(torch.__version__).split("+")[0] != "2.9.0":
+        raise RuntimeError("Expected PyTorch 2.9.0 with CUDA 12.8")
+    for index in range(1):
+        if "RTX PRO 6000" not in torch.cuda.get_device_properties(index).name or torch.cuda.get_device_capability(index) != (12, 0):
+            raise RuntimeError("Expected RTX PRO 6000 Blackwell")
         memory_gib = torch.cuda.get_device_properties(index).total_memory / (1024**3)
-        if memory_gib < 44:
-            raise RuntimeError(f"GPU {index} has only {memory_gib:.1f} GiB; at least 44 GiB is required")
+        if memory_gib < 90:
+            raise RuntimeError(f"GPU {index} has only {memory_gib:.1f} GiB; at least 90 GiB is required")
 
 
 def main() -> None:
@@ -44,7 +48,7 @@ def main() -> None:
         "launch",
         "--config_file",
         ".treqs/assets/accelerate-zero2-cpu.yaml",
-        "--num_processes", "4",
+        "--num_processes", "1",
         "lda/training/train_LDA.py",
         "--config_yaml", str(BASE_SNAPSHOT / "config.yaml"),
         "--framework.qwenvl.base_vlm", str(QWEN_SNAPSHOT),
@@ -56,11 +60,12 @@ def main() -> None:
         "--framework.action_model.only_wo_video_gen", "false",
         "--datasets.vla_data.data_root_dir", "playground/demo_data",
         "--datasets.vla_data.data_mix", "demo_data",
-        "--datasets.vla_data.per_device_batch_size", "1",
+        "--datasets.vla_data.per_device_batch_size", "4",
         "--datasets.vla_data.training_tasks", '["policy"]',
         "--datasets.vla_data.training_task_weights", "[1.0]",
         "--trainer.freeze_modules", "action_model.vision_encoder,qwen_vl_interface",
         "--trainer.max_train_steps", "1",
+        "--trainer.gradient_accumulation_steps", "1",
         "--trainer.save_interval", "1",
         "--trainer.eval_interval", "1000",
         "--trainer.logging_frequency", "1",

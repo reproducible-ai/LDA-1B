@@ -99,27 +99,40 @@ def license_index() -> str:
 def write_receipts(release_root: Path, checkpoint: Path, evaluation: dict) -> None:
     if evaluation.get("status") != "passed" or evaluation.get("optimizer_steps_completed") != 1:
         raise RuntimeError("Receipts require one verified optimizer step")
-    result = dict(evaluation)
-    result["optimizerSteps"] = evaluation["optimizer_steps_completed"]
-    result["claim"] = "Private non-commercial training-path canary only; no model-quality claim."
+    digest = sha256_file(checkpoint)
+    if evaluation.get("checkpoint", {}).get("sha256") != digest:
+        raise RuntimeError("Checkpoint hash differs from loaded evaluation")
+    if evaluation.get("loadVerified") is not True:
+        raise RuntimeError("Checkpoint load verification is required")
+    # Preserve the original loader layout within the published directory.
+    for source in sorted(release_root.rglob("*")):
+        if source.is_file() and checkpoint.parent not in source.parents:
+            target = checkpoint.parent / "loader" / source.relative_to(release_root)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
     result_path = checkpoint.parent / "result.json"
-    result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     manifest_path = checkpoint.parent / "artifact-manifest.json"
     records = [
-        {"path": str(path.relative_to(release_root)), "size": path.stat().st_size,
-         "sha256": sha256_file(path),
-         **({"content_hex": path.read_bytes().hex()}
-            if path not in (checkpoint, result_path) else {})}
-        for path in sorted(release_root.rglob("*"))
-        if path.is_file() and path != manifest_path
+        {"path": str(path.relative_to(checkpoint.parent)),
+         "sizeBytes": path.stat().st_size, "sha256": sha256_file(path)}
+        for path in sorted(checkpoint.parent.rglob("*"))
+        if path.is_file() and path not in (manifest_path, result_path)
     ]
-    manifest_path.write_text(
-        json.dumps({"schema_version": 1, "format": "pytorch-state-dict",
-                    "path_base": "release",
-                    "supporting_file_encoding": "hex", "files": records}, indent=2, sort_keys=True) + "\n"
-    )
-    print(f"E2E_ARTIFACT={checkpoint}")
-    print(f"E2E_RESULT={result_path}")
+    artifact = {"schema": "reproai.artifact/v1", "format": "pytorch-state-dict",
+                "path": str(checkpoint.relative_to(ROOT)) if checkpoint.is_relative_to(ROOT) else str(checkpoint),
+                "sha256": digest, "sizeBytes": checkpoint.stat().st_size,
+                "loadVerified": True, "files": records}
+    result = {"schema": "reproai.result/v1", "optimizerSteps": 1,
+              "taskMetric": {"metric": "optimizerSteps", "minimum": 1},
+              "checkpoint": artifact["path"], "artifactSha256": digest,
+              "artifactSizeBytes": artifact["sizeBytes"], "loadVerified": True,
+              "evaluation": evaluation,
+              "claim": "Private non-commercial training-path canary only; no model-quality claim."}
+    manifest = dict(artifact, schema="reproai.artifact-manifest/v1")
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    print("E2E_ARTIFACT=" + json.dumps(artifact, sort_keys=True))
+    print("E2E_RESULT=" + json.dumps(result, sort_keys=True))
 
 
 def main() -> None:
@@ -165,7 +178,8 @@ def main() -> None:
     config["trainer"]["freeze_modules"] = "action_model.vision_encoder,qwen_vl_interface"
     config["datasets"]["vla_data"]["data_root_dir"] = "playground/demo_data"
     config["datasets"]["vla_data"]["data_mix"] = "demo_data"
-    config["datasets"]["vla_data"]["per_device_batch_size"] = 1
+    config["datasets"]["vla_data"]["per_device_batch_size"] = 4
+    config["trainer"]["gradient_accumulation_steps"] = 1
     config["datasets"]["vla_data"]["training_tasks"] = ["policy"]
     config["datasets"]["vla_data"]["training_task_weights"] = [1.0]
     (RELEASE_ROOT / "config.yaml").write_text(yaml.safe_dump(config, sort_keys=False))

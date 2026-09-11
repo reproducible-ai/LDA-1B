@@ -29,7 +29,7 @@ It is **not a quality, accuracy, convergence, or deployment-safety claim**.
 - VLM: `Qwen/Qwen3-VL-4B-Instruct@{{QWEN_MODEL_REVISION}}`
 - Vision encoder architecture: `facebook/dinov3-vits16-pretrain-lvd1689m@{{DINO_MODEL_REVISION}}`; weights come from the strict-loaded starting checkpoint
 - Dataset: four committed `playground/demo_data/sim_pick_place` episodes
-- Training: one optimizer step, global batch size 4, Qwen and DINO frozen
+- Training: one optimizer step, global batch size 4, BF16, one 96 GB RTX PRO 6000 Blackwell GPU, Qwen and DINO frozen
 - Release path: `{{PUBLICATION_VERSION}}`
 
 `evaluation.json` records both checkpoint SHA-256 digests, tensor metadata, and
@@ -38,7 +38,9 @@ records pinned revisions and hashes for the downloaded inputs and demo files.
 
 ## Loading layout
 
-The release preserves LDA's required layout:
+The private package includes loader resources under `checkpoints/loader/`.
+Copy those resources to a new release root and place the published state dictionary
+under its `checkpoints/` directory to restore LDA's required layout:
 
 ```text
 config.yaml

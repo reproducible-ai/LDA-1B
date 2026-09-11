@@ -10,10 +10,10 @@ uv run --offline --no-project --with pytest==8.4.2 --with pyyaml==6.0.3 --with t
 
 For a dependency-free workspace check, run
 `python3 .treqs/scripts/check_local_candidate.py`. This checks stage shell syntax,
-the exact three-file private upload, supervisor repository replacement, and actual receipt
+the complete checkpoint-directory private upload, supervisor repository replacement, and actual receipt
 generation using synthetic files, including markers, metric, and package hashes.
 The package emits E2E_ARTIFACT and E2E_RESULT and preserves loader metadata and
-component notices as hex-encoded supporting files in the artifact manifest. These local checks
+component notices as physical files under checkpoints/loader, inventoried in the artifact manifest. These local checks
 do not establish GPU execution or constitute the independent artifact audit.
 See `iteration-1-notes.md` for checks run and current limitations.
 
@@ -33,7 +33,7 @@ publication.
 - Qwen VLM: `Qwen/Qwen3-VL-4B-Instruct@ebb281ec70b05090aa6165b016eac8ec08e71b17`
 - DINO encoder architecture: `facebook/dinov3-vits16-pretrain-lvd1689m@114c1379950215c8b35dfcd4e90a5c251dde0d32`; its weights are supplied by the strict-loaded LDA checkpoint
 - Dataset: `playground/demo_data/sim_pick_place` (four episodes, committed in source)
-- Compute target: `d557ec14-5941-4e42-9848-daff50e1ad9d` (4x NVIDIA L40S)
+- Compute target: one 96 GB RTX PRO 6000 Blackwell GPU
 - ROAR: `roar-cli==0.4.5`, `huggingface-hub==0.36.0`, preload tracer
 - Build backend: `setuptools==80.9.0`
 - Required target secret: `HF_TOKEN`
@@ -54,7 +54,7 @@ ROAR's metadata and storage commands directly against those captured artifacts:
 1. `fetch` downloads exact LDA/Qwen revisions and the exact pinned DINOv3
    license, generates the pinned DINO architecture config, and hashes all model
    and demo files;
-2. `train` performs one policy-task optimizer step on four GPUs with Qwen and
+2. `train` performs one policy-task optimizer step on one GPU (per-device batch four, accumulation one) with Qwen and
    DINO frozen;
 3. `evaluate` verifies step 1, matching state-dict keys, distinct checkpoint
    hashes, and at least one changed `action_model.*` tensor;
@@ -63,15 +63,15 @@ ROAR's metadata and storage commands directly against those captured artifacts:
 5. `label` attaches model, version, license, description, and documentation
    metadata to the released checkpoint;
 6. `publish` receives GLaaS credentials and publishes privately through `roar put`
-   as exactly the checkpoint, artifact manifest, and result receipt. The supervisor replaces the placeholder
+   as the complete checkpoints directory, containing checkpoint, receipts, and loader resources. The supervisor replaces the placeholder
    repository in the workflow; preflight derives its repository from that destination.
    `checkpoints/result.json` records `optimizerSteps`, and
-   `checkpoints/artifact-manifest.json` hashes all other release files, including
+   `checkpoints/artifact-manifest.json` hashes all other published files using checkpoint-directory-relative paths, including
    loader metadata and component notices. Independent audit remains the supervisor's task.
 
-The supervisor must enforce the $15 total budget before scheduling four L40S GPUs;
+The supervisor must enforce the $15 total budget before scheduling the single Blackwell GPU;
 per-command timeouts alone do not establish a dollar cap.
-The publication command uses three literal file sources and starts directly
+The publication command uses one literal checkpoint-directory source and starts directly
 with `roar put` so the supervisor can bind it. The supervisor must also bound the
 publication stage duration; this command has no shell timeout wrapper.
 
@@ -91,10 +91,15 @@ hash-verifies and includes all three notices before creating release output; it
 does not present CC BY-NC 4.0 as superseding the other component terms. This
 branch still does not authorize compute or publication.
 
-The artifact manifest embeds every supporting file as `content_hex`, alongside its
-release-relative path, byte size, and SHA-256. To reconstruct the loader layout,
-place the published checkpoint and result in `release/checkpoints/`, decode each
-embedded record with `bytes.fromhex`, verify its size and hash, and write it at
-its validated relative path beneath `release/`. Reject absolute paths and parent
-traversal. This preserves notices and configuration within the required three-file
-private package without changing the PyTorch state dictionary.
+The publication includes `checkpoints/loader/` with all notices, input hashes,
+configuration, statistics, and upstream metadata as ordinary files. Every published
+file except the two receipts has a SHA-256 and `sizeBytes` inventory entry.
+To restore LDA's layout, copy `checkpoints/loader/` contents into a new release
+root and place the published state dictionary under that root's `checkpoints/`.
+Retain the original private package for independent verification. Paths in the
+manifest are relative to the published checkpoint directory, without traversal.
+
+Runtime pins are PyTorch 2.9.0+cu128, torchvision 0.24.0+cu128, and torchcodec
+0.8.1. PyTorch resolves its compatible CUDA dependencies; the obsolete CUDA 12.4
+pins have been removed. BF16 and DeepSpeed ZeRO-2 CPU optimizer offload remain.
+This hardware adaptation does not establish hardware equivalence or full reproduction.

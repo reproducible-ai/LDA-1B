@@ -140,7 +140,7 @@ def test_hf_preflight_rejects_a_public_destination_before_preupload(monkeypatch)
         )
 
 
-def test_runner_launches_one_exact_four_gpu_one_step_command(monkeypatch, tmp_path):
+def test_runner_launches_one_exact_one_gpu_one_step_command(monkeypatch, tmp_path):
     runner = load_script("run_robocasa_canary", monkeypatch)
     base_snapshot = tmp_path / "base"
     qwen_snapshot = tmp_path / "qwen"
@@ -162,12 +162,15 @@ def test_runner_launches_one_exact_four_gpu_one_step_command(monkeypatch, tmp_pa
     monkeypatch.setattr(runner, "BASE_CHECKPOINT", base_checkpoint)
     monkeypatch.setattr(runner, "RUN_ROOT", tmp_path / "run")
     monkeypatch.setattr(runner, "RUN_ID", "test-run")
-    monkeypatch.setattr(runner.torch.cuda, "device_count", lambda: 4)
+    monkeypatch.setattr(runner.torch.cuda, "device_count", lambda: 1)
     monkeypatch.setattr(
         runner.torch.cuda,
         "get_device_properties",
-        lambda _index: type("Properties", (), {"total_memory": 48 * 1024**3})(),
+        lambda _index: type("Properties", (), {"total_memory": 96 * 1024**3, "name": "RTX PRO 6000 Blackwell"})(),
     )
+    monkeypatch.setattr(runner.torch, "__version__", "2.9.0+cu128")
+    monkeypatch.setattr(runner.torch.version, "cuda", "12.8")
+    monkeypatch.setattr(runner.torch.cuda, "get_device_capability", lambda _: (12, 0))
     calls = []
     monkeypatch.setattr(runner.subprocess, "run", lambda *args, **kwargs: calls.append((args, kwargs)))
 
@@ -176,7 +179,7 @@ def test_runner_launches_one_exact_four_gpu_one_step_command(monkeypatch, tmp_pa
     assert len(calls) == 1
     command = calls[0][0][0]
     kwargs = calls[0][1]
-    assert command[command.index("--num_processes") + 1] == "4"
+    assert command[command.index("--num_processes") + 1] == "1"
     assert command[command.index("--trainer.max_train_steps") + 1] == "1"
     assert command[command.index("--trainer.save_interval") + 1] == "1"
     assert kwargs["cwd"] == tmp_path
@@ -226,6 +229,7 @@ def configure_packager(monkeypatch, tmp_path, *, include_dino_license: bool):
                 "status": "passed",
                 "global_step": 1,
                 "optimizer_steps_completed": 1,
+                "loadVerified": True,
                 "checkpoint": {"sha256": sha256_file(trained_checkpoint)},
             }
         )
@@ -305,8 +309,9 @@ def test_packager_bundles_and_discloses_component_licenses(monkeypatch, tmp_path
     packager.main()
 
     output = capsys.readouterr().out
-    assert f"E2E_ARTIFACT={packager.RELEASE_CHECKPOINT}" in output
-    assert f"E2E_RESULT={release_root / 'checkpoints/result.json'}" in output
+    receipts = {line.split("=", 1)[0]: json.loads(line.split("=", 1)[1]) for line in output.splitlines() if line.startswith("E2E_")}
+    assert receipts["E2E_RESULT"] == json.loads((release_root / "checkpoints/result.json").read_text())
+    assert receipts["E2E_ARTIFACT"]["loadVerified"] is True
     assert (release_root / "LICENSE").is_file()
     assert (release_root / "CC-BY-NC-4.0.md").is_file()
     assert (release_root / "APACHE-2.0.txt").is_file()
@@ -333,14 +338,11 @@ def test_packager_bundles_and_discloses_component_licenses(monkeypatch, tmp_path
     result = json.loads((release_root / "checkpoints/result.json").read_text())
     assert result["optimizerSteps"] == 1
     manifest = json.loads((release_root / "checkpoints/artifact-manifest.json").read_text())
-    expected = {str(p.relative_to(release_root)) for p in release_root.rglob("*")
-                if p.is_file() and p.name != "artifact-manifest.json"}
+    directory = release_root / "checkpoints"
+    expected = {str(p.relative_to(directory)) for p in directory.rglob("*")
+                if p.is_file() and p.name not in {"artifact-manifest.json", "result.json"}}
     assert {record["path"] for record in manifest["files"]} == expected
     for record in manifest["files"]:
-        path = release_root / record["path"]
+        path = directory / record["path"]
         assert record["sha256"] == sha256_file(path)
-        assert record["size"] == path.stat().st_size
-        if "content_hex" in record:
-            assert bytes.fromhex(record["content_hex"]) == path.read_bytes()
-        else:
-            assert record["path"] in {"checkpoints/canary.pt", "checkpoints/result.json"}
+        assert record["sizeBytes"] == path.stat().st_size

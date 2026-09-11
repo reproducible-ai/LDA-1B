@@ -18,6 +18,7 @@ for match in re.finditer(r'^([a-z]+):\n((?:[ \t].*\n|\n)+)', workflow, re.M):
     subprocess.run(['bash', '-n'], input=command, text=True, check=True)
     stages[name] = (body, command)
 assert set(stages) == {'setup', 'fetch', 'train', 'evaluate', 'package', 'label', 'publish'}
+assert set(re.findall(r'^([a-z_]+):', workflow, re.M)) == set(stages) | {'name', 'secrets'}
 assert 'trace: "run"' in stages['train'][0]
 assert 'roar' not in stages['train'][1]
 body, command = stages['publish']
@@ -28,11 +29,8 @@ args = shlex.split(uploads[0])
 assert args[-1].startswith('hf://')
 assert args[-1].endswith('/artifacts/lda-robocasa-canary/release/checkpoints')
 assert args[:2] == ["roar", "put"]
-assert args[2:5] == [
-    "artifacts/lda-robocasa-canary/release/checkpoints/" + name
-    for name in ("LDA-robocasa-treqs-canary.pt", "artifact-manifest.json", "result.json")
-]
-assert args[5:-1] == ["--private", "--yes", "--no-tag", "-m", "private reproducibility canary"]
+assert args[2] == "artifacts/lda-robocasa-canary/release/checkpoints"
+assert args[3:-1] == ["--private", "--yes", "--no-tag", "-m", "private reproducibility canary"]
 assert all(flag in args for flag in ('--private', '--yes', '--no-tag'))
 assert not any(flag in args for flag in ('--public', '--anonymous'))
 assert args.count('-m') == 1 and args[args.index('-m') + 1].strip()
@@ -61,12 +59,13 @@ import hashlib
 import io
 import json
 import tempfile
+import shutil
 
 package_path = ROOT / '.treqs/scripts/package_robocasa_canary.py'
 tree = ast.parse(package_path.read_text())
 functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)
              and node.name in {'sha256_file', 'write_receipts'}]
-namespace = {'Path': Path, 'hashlib': hashlib, 'json': json}
+namespace = {'Path': Path, 'hashlib': hashlib, 'json': json, 'shutil': shutil, 'ROOT': ROOT}
 exec(compile(ast.Module(body=functions, type_ignores=[]), str(package_path), 'exec'), namespace)
 with tempfile.TemporaryDirectory(dir=ROOT) as directory:
     release = Path(directory) / 'release'
@@ -79,27 +78,44 @@ with tempfile.TemporaryDirectory(dir=ROOT) as directory:
         path = release / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('fixture: ' + name)
-    evaluation = {'status': 'passed', 'optimizer_steps_completed': 1}
+    evaluation = {'status': 'passed', 'optimizer_steps_completed': 1, 'loadVerified': True, 'checkpoint': {'sha256': hashlib.sha256(checkpoint.read_bytes()).hexdigest()}}
     output = io.StringIO()
     with contextlib.redirect_stdout(output):
         namespace['write_receipts'](release, checkpoint, evaluation)
         namespace['write_receipts'](release, checkpoint, evaluation)
     result_path = checkpoint.parent / 'result.json'
-    assert f'E2E_ARTIFACT={checkpoint}' in output.getvalue()
-    assert f'E2E_RESULT={result_path}' in output.getvalue()
-    assert json.loads(result_path.read_text())['optimizerSteps'] == 1
+    receipts = output.getvalue().splitlines()
+    assert len(receipts) == 4
+    artifact = json.loads(receipts[0].removeprefix('E2E_ARTIFACT='))
+    result = json.loads(receipts[1].removeprefix('E2E_RESULT='))
+    assert result == json.loads(result_path.read_text())
+    assert result['schema'] == 'reproai.result/v1'
+    assert result['optimizerSteps'] == 1
+    assert result['taskMetric'] == {'metric': 'optimizerSteps', 'minimum': 1}
+    assert result['artifactSha256'] == artifact['sha256'] == hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    assert result['artifactSizeBytes'] == artifact['sizeBytes'] == checkpoint.stat().st_size
+    assert result['checkpoint'] == artifact['path']
+    assert artifact['schema'] == 'reproai.artifact/v1'
     manifest = json.loads((checkpoint.parent / 'artifact-manifest.json').read_text())
+    assert manifest['schema'] == 'reproai.artifact-manifest/v1'
     assert manifest['format'] == 'pytorch-state-dict'
-    assert manifest['path_base'] == 'release'
-    assert {record['path'] for record in manifest['files']} == set(files + ['checkpoints/result.json'])
+    assert manifest['loadVerified'] is artifact['loadVerified'] is result['loadVerified'] is True
+    assert manifest['files'] == artifact['files']
+    expected = {'canary.pt'} | {'loader/' + name for name in files if name != 'checkpoints/canary.pt'}
+    assert {record['path'] for record in manifest['files']} == expected
     for record in manifest['files']:
-        data = (release / record['path']).read_bytes()
-        assert record['size'] == len(data)
+        path = Path(record['path'])
+        assert not path.is_absolute() and '..' not in path.parts
+        data = (checkpoint.parent / path).read_bytes()
+        assert record['sizeBytes'] == len(data)
         assert record['sha256'] == hashlib.sha256(data).hexdigest()
-        if "content_hex" in record:
-            assert bytes.fromhex(record["content_hex"]) == data
+    for updates in ({'loadVerified': False}, {'checkpoint': {'sha256': 'wrong'}}):
+        try:
+            namespace['write_receipts'](release, checkpoint, dict(evaluation, **updates))
+        except RuntimeError:
+            pass
         else:
-            assert record["path"] in {"checkpoints/canary.pt", "checkpoints/result.json"}
+            raise AssertionError('Unverified checkpoint accepted')
     for steps in (0, 2, None):
         try:
             namespace['write_receipts'](release, checkpoint,
@@ -109,3 +125,66 @@ with tempfile.TemporaryDirectory(dir=ROOT) as directory:
         else:
             raise AssertionError('Invalid optimizer step count accepted')
 print('PASS: receipt markers, metric, complete package hashes, repeat writes, invalid step rejection')
+
+# Exercise actual runtime validation and launch construction with no CUDA workload.
+from types import SimpleNamespace
+import os
+runner_path = ROOT / '.treqs/scripts/run_robocasa_canary.py'
+tree = ast.parse(runner_path.read_text())
+functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)]
+properties = SimpleNamespace(total_memory=96 * 1024**3, name='RTX PRO 6000 Blackwell')
+cuda = SimpleNamespace(device_count=lambda: 1, get_device_properties=lambda _: properties,
+                       get_device_capability=lambda _: (12, 0))
+fake_torch = SimpleNamespace(cuda=cuda, version=SimpleNamespace(cuda='12.8'), __version__='2.9.0+cu128')
+calls = []
+with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+    root = Path(directory)
+    paths = dict(BASE_CHECKPOINT=root / 'base/checkpoints/base.pt',
+                 BASE_SNAPSHOT=root / 'base', QWEN_SNAPSHOT=root / 'qwen',
+                 PRETRAINED_ROOT=root / 'pretrained', ROOT=root,
+                 RUN_ROOT=root / 'run', RUN_ID='fixture')
+    for path in (paths['BASE_CHECKPOINT'], paths['BASE_SNAPSHOT'] / 'config.yaml',
+                 paths['QWEN_SNAPSHOT'] / 'config.json',
+                 paths['PRETRAINED_ROOT'] / 'dinov3-vits16-pretrain-lvd1689m/config.json'):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('fixture')
+    namespace = dict(paths, torch=fake_torch, os=os,
+                     subprocess=SimpleNamespace(run=lambda *a, **kw: calls.append((a, kw))))
+    exec(compile(ast.Module(body=functions, type_ignores=[]), str(runner_path), 'exec'), namespace)
+    namespace['main']()
+    assert len(calls) == 1
+    argv = calls[0][0][0]
+    options = dict(zip(argv[argv.index('--config_yaml')::2], argv[argv.index('--config_yaml') + 1::2]))
+    assert argv[argv.index('--num_processes') + 1] == '1'
+    assert options['--datasets.vla_data.per_device_batch_size'] == '4'
+    assert options['--trainer.gradient_accumulation_steps'] == '1'
+    assert options['--trainer.max_train_steps'] == '1'
+    assert options['--trainer.strict_pretrained_checkpoint'] == 'true'
+    assert options['--trainer.freeze_modules'] == 'action_model.vision_encoder,qwen_vl_interface'
+    assert options['--datasets.vla_data.training_tasks'] == '["policy"]'
+    for obj, key, invalid in ((cuda, 'device_count', lambda: 4),
+                              (properties, 'total_memory', 48 * 1024**3),
+                              (properties, 'name', 'L40S'),
+                              (cuda, 'get_device_capability', lambda _: (8, 9)),
+                              (fake_torch.version, 'cuda', '12.4'),
+                              (fake_torch, '__version__', '2.6.0')):
+        original = getattr(obj, key)
+        setattr(obj, key, invalid)
+        try:
+            namespace['validate_runtime']()
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError('Incompatible runtime accepted: ' + key)
+        finally:
+            setattr(obj, key, original)
+requirements = (ROOT / 'requirements.txt').read_text().splitlines()
+assert {'torch==2.9.0+cu128', 'torchvision==0.24.0+cu128', 'torchcodec==0.8.1',
+        'sympy==1.14.0', 'triton==3.5.0'} <= set(requirements)
+assert not any(line.startswith('nvidia-') and not line.startswith('nvidia-ml-py==') for line in requirements)
+assert 'num_processes: 1' in (ROOT / '.treqs/assets/accelerate-zero2-cpu.yaml').read_text()
+ds = json.loads((ROOT / '.treqs/assets/deepspeed-zero2-cpu.json').read_text())
+assert ds['gradient_accumulation_steps'] == 1 and ds['bf16']['enabled'] is True
+assert ds['zero_optimization']['offload_optimizer']['device'] == 'cpu'
+assert 'test "${GPU_COUNT}" = "1"' in stages['setup'][1]
+print('PASS: single Blackwell launch, effective batch four, frozen encoders, strict load, six invalid runtimes, dependency pins, BF16/offload configuration (mocked only)')

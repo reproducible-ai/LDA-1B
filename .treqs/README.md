@@ -1,5 +1,21 @@
 # LDA RoboCasa private platform canary
 
+## Local validation and current handoff
+
+Run the full recipe tests without installing the Linux GPU requirements on macOS:
+
+```bash
+uv run --offline --no-project --with pytest==8.4.2 --with pyyaml==6.0.3 --with torch python -m pytest -q tests/treqs
+```
+
+This cached environment passed all 30 tests on September 11. These tests do not
+establish GPU execution or compliance with the current harness evidence contract.
+The retained issue-32 candidate is a development checkpoint: its upload directory
+and manifest/result fields still need to match the supervisor's candidateContract
+packet. In particular, emit E2E_ARTIFACT and E2E_RESULT and preserve the complete
+loader metadata and component notices inside the directory the supervisor verifies.
+Add tests against those exact receipt fields before requesting compute.
+
 This private platform canary fine-tunes the pinned `Wayer2/LDA-robocasa` checkpoint for exactly
 one optimizer step on LDA's four-episode committed demo dataset. The purpose is
 to verify TReqs orchestration, ROAR capture, GLaaS lineage, checkpoint

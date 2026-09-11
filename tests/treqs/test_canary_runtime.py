@@ -295,7 +295,7 @@ def test_packager_fails_closed_for_a_tampered_static_license(
     assert not release_root.exists()
 
 
-def test_packager_bundles_and_discloses_component_licenses(monkeypatch, tmp_path):
+def test_packager_bundles_and_discloses_component_licenses(monkeypatch, tmp_path, capsys):
     packager, release_root = configure_packager(
         monkeypatch,
         tmp_path,
@@ -304,6 +304,9 @@ def test_packager_bundles_and_discloses_component_licenses(monkeypatch, tmp_path
 
     packager.main()
 
+    output = capsys.readouterr().out
+    assert f"E2E_ARTIFACT={packager.RELEASE_CHECKPOINT}" in output
+    assert f"E2E_RESULT={release_root / 'checkpoints/result.json'}" in output
     assert (release_root / "LICENSE").is_file()
     assert (release_root / "CC-BY-NC-4.0.md").is_file()
     assert (release_root / "APACHE-2.0.txt").is_file()
@@ -337,3 +340,7 @@ def test_packager_bundles_and_discloses_component_licenses(monkeypatch, tmp_path
         path = release_root / record["path"]
         assert record["sha256"] == sha256_file(path)
         assert record["size"] == path.stat().st_size
+        if "content_hex" in record:
+            assert bytes.fromhex(record["content_hex"]) == path.read_bytes()
+        else:
+            assert record["path"] in {"checkpoints/canary.pt", "checkpoints/result.json"}

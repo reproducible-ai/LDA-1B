@@ -8,13 +8,14 @@ Run the full recipe tests without installing the Linux GPU requirements on macOS
 uv run --offline --no-project --with pytest==8.4.2 --with pyyaml==6.0.3 --with torch python -m pytest -q tests/treqs
 ```
 
-This cached environment passed all 30 tests on September 11. These tests do not
-establish GPU execution or compliance with the current harness evidence contract.
-The retained issue-32 candidate is a development checkpoint: its upload directory
-and manifest/result fields still need to match the supervisor's candidateContract
-packet. In particular, emit E2E_ARTIFACT and E2E_RESULT and preserve the complete
-loader metadata and component notices inside the directory the supervisor verifies.
-Add tests against those exact receipt fields before requesting compute.
+For a dependency-free workspace check, run
+`python3 .treqs/scripts/check_local_candidate.py`. This checks stage shell syntax,
+the exact three-file private upload, supervisor repository replacement, and actual receipt
+generation using synthetic files, including markers, metric, and package hashes.
+The package emits E2E_ARTIFACT and E2E_RESULT and preserves loader metadata and
+component notices as hex-encoded supporting files in the artifact manifest. These local checks
+do not establish GPU execution or constitute the independent artifact audit.
+See `iteration-1-notes.md` for checks run and current limitations.
 
 This private platform canary fine-tunes the pinned `Wayer2/LDA-robocasa` checkpoint for exactly
 one optimizer step on LDA's four-episode committed demo dataset. The purpose is
@@ -62,7 +63,7 @@ ROAR's metadata and storage commands directly against those captured artifacts:
 5. `label` attaches model, version, license, description, and documentation
    metadata to the released checkpoint;
 6. `publish` receives GLaaS credentials and publishes privately through `roar put`
-   as one complete release directory upload. The supervisor replaces the placeholder
+   as exactly the checkpoint, artifact manifest, and result receipt. The supervisor replaces the placeholder
    repository in the workflow; preflight derives its repository from that destination.
    `checkpoints/result.json` records `optimizerSteps`, and
    `checkpoints/artifact-manifest.json` hashes all other release files, including
@@ -70,7 +71,7 @@ ROAR's metadata and storage commands directly against those captured artifacts:
 
 The supervisor must enforce the $15 total budget before scheduling four L40S GPUs;
 per-command timeouts alone do not establish a dollar cap.
-The publication command uses a literal release-directory source and starts directly
+The publication command uses three literal file sources and starts directly
 with `roar put` so the supervisor can bind it. The supervisor must also bound the
 publication stage duration; this command has no shell timeout wrapper.
 
@@ -89,3 +90,11 @@ and embedded DINOv3 materials remain under the DINOv3 License. The package
 hash-verifies and includes all three notices before creating release output; it
 does not present CC BY-NC 4.0 as superseding the other component terms. This
 branch still does not authorize compute or publication.
+
+The artifact manifest embeds every supporting file as `content_hex`, alongside its
+release-relative path, byte size, and SHA-256. To reconstruct the loader layout,
+place the published checkpoint and result in `release/checkpoints/`, decode each
+embedded record with `bytes.fromhex`, verify its size and hash, and write it at
+its validated relative path beneath `release/`. Reject absolute paths and parent
+traversal. This preserves notices and configuration within the required three-file
+private package without changing the PyTorch state dictionary.

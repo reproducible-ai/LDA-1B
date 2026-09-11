@@ -78,7 +78,12 @@ def test_workflow_is_one_clean_lineage_dag():
     assert args[-1].startswith("hf://")
     assert args[-1].endswith("/artifacts/lda-robocasa-canary/release/checkpoints")
     assert args.count("-m") == 1 and args[args.index("-m") + 1].strip()
-    assert args[:3] == ["roar", "put", "artifacts/lda-robocasa-canary/release"]
+    assert args[:2] == ["roar", "put"]
+    assert args[2:5] == [
+        "artifacts/lda-robocasa-canary/release/checkpoints/" + name
+        for name in ("LDA-robocasa-treqs-canary.pt", "artifact-manifest.json", "result.json")
+    ]
+    assert args[5:-1] == ["--private", "--yes", "--no-tag", "-m", "private reproducibility canary"]
     assert "--anonymous" not in args
     assert "--private --yes --no-tag" in publish
     assert "--public" not in publish
@@ -124,7 +129,7 @@ def test_workflow_hard_bounds_external_operations():
     assert f"{hard_timeout} 180 roar label set" in workflow["label"]["command"]
     publish_lines = workflow["publish"]["command"].splitlines()
     assert any(f"{hard_timeout} 180 roar status --untracked-dirs" in line for line in publish_lines)
-    assert sum(line.startswith("roar put artifacts/lda-robocasa-canary/release ") for line in publish_lines) == 1
+    assert sum(line.startswith("roar put artifacts/lda-robocasa-canary/release/checkpoints/LDA-robocasa-treqs-canary.pt ") for line in publish_lines) == 1
 
 
 def test_workflow_stage_commands_are_valid_bash():

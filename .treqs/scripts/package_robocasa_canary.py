@@ -96,6 +96,32 @@ def license_index() -> str:
     )
 
 
+def write_receipts(release_root: Path, checkpoint: Path, evaluation: dict) -> None:
+    if evaluation.get("status") != "passed" or evaluation.get("optimizer_steps_completed") != 1:
+        raise RuntimeError("Receipts require one verified optimizer step")
+    result = dict(evaluation)
+    result["optimizerSteps"] = evaluation["optimizer_steps_completed"]
+    result["claim"] = "Private non-commercial training-path canary only; no model-quality claim."
+    result_path = checkpoint.parent / "result.json"
+    result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    manifest_path = checkpoint.parent / "artifact-manifest.json"
+    records = [
+        {"path": str(path.relative_to(release_root)), "size": path.stat().st_size,
+         "sha256": sha256_file(path),
+         **({"content_hex": path.read_bytes().hex()}
+            if path not in (checkpoint, result_path) else {})}
+        for path in sorted(release_root.rglob("*"))
+        if path.is_file() and path != manifest_path
+    ]
+    manifest_path.write_text(
+        json.dumps({"schema_version": 1, "format": "pytorch-state-dict",
+                    "path_base": "release",
+                    "supporting_file_encoding": "hex", "files": records}, indent=2, sort_keys=True) + "\n"
+    )
+    print(f"E2E_ARTIFACT={checkpoint}")
+    print(f"E2E_RESULT={result_path}")
+
+
 def main() -> None:
     if RELEASE_CHECKPOINT.parent.name != "checkpoints":
         raise RuntimeError("Release checkpoint must be nested under checkpoints/")
@@ -204,22 +230,7 @@ def main() -> None:
         "evaluation": evaluation,
     }
     (RELEASE_ROOT / "publication.json").write_text(json.dumps(publication, indent=2, sort_keys=True) + "\n")
-    result = dict(evaluation)
-    result["optimizerSteps"] = evaluation["optimizer_steps_completed"]
-    result["claim"] = "Private non-commercial training-path canary only; no model-quality claim."
-    (RELEASE_CHECKPOINT.parent / "result.json").write_text(
-        json.dumps(result, indent=2, sort_keys=True) + "\n"
-    )
-    # Manifest paths are relative to release/; upload the entire loader package.
-    records = [
-        {"path": str(path.relative_to(RELEASE_ROOT)), "size": path.stat().st_size,
-         "sha256": sha256_file(path)}
-        for path in sorted(RELEASE_ROOT.rglob("*")) if path.is_file()
-    ]
-    (RELEASE_CHECKPOINT.parent / "artifact-manifest.json").write_text(
-        json.dumps({"schema_version": 1, "format": "pytorch-state-dict",
-                    "path_base": "release", "files": records}, indent=2, sort_keys=True) + "\n"
-    )
+    write_receipts(RELEASE_ROOT, RELEASE_CHECKPOINT, evaluation)
     print(f"Packaged release for hf://{PUBLICATION_REPO_ID}/{PUBLICATION_VERSION}")
 
 

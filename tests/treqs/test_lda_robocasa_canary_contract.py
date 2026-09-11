@@ -38,7 +38,7 @@ def test_inputs_and_private_publication_are_immutable():
     assert contract.DINO_MODEL_REVISION == "114c1379950215c8b35dfcd4e90a5c251dde0d32"
     assert contract.DATASET_PATH == ROOT / "playground" / "demo_data" / "sim_pick_place"
     assert contract.EXPECTED_EPISODES == 4
-    assert contract.PUBLICATION_REPO_ID == "reproducible-ai/harness-test-lda-robocasa-issue-5"
+    assert contract.PUBLICATION_REPO_ID in load_workflow()["publish"]["command"]
     assert contract.PUBLICATION_VERSION == "robocasa-demo-canary-0.0.1"
 
 
@@ -61,16 +61,25 @@ def test_workflow_is_one_clean_lineage_dag():
     assert "--with huggingface-hub " not in setup
     assert any(line.strip().endswith(".venv/bin/python -m pytest -q tests/treqs") for line in setup.splitlines())
     for stage in stages:
-        assert workflow[stage]["trace"] == "off"
-    for stage in stages[:4]:
+        assert workflow[stage]["trace"] == ("run" if stage == "train" else "off")
+    for stage in ("fetch", "evaluate", "package"):
         assert f"roar run -n {stage}" in workflow[stage]["command"]
-    assert "four traced workload stages" in readme
+    assert "supervisor-managed training trace" in readme
+    assert "roar" not in workflow["train"]["command"]
     assert "Every workload stage is an explicit named `roar run`" not in readme
     assert "roar label set" in workflow["label"]["command"]
     assert workflow["publish"]["glaas_creds"] is True
     publish = workflow["publish"]["command"]
     assert "roar put" in publish
-    assert ("hf://reproducible-ai/harness-test-lda-robocasa-issue-5/robocasa-demo-canary-0.0.1") in publish
+    import shlex
+    upload = [line for line in publish.splitlines() if "roar put" in line]
+    assert len(upload) == 1
+    args = shlex.split(upload[0])
+    assert args[-1].startswith("hf://")
+    assert args[-1].endswith("/artifacts/lda-robocasa-canary/release/checkpoints")
+    assert args.count("-m") == 1 and args[args.index("-m") + 1].strip()
+    assert args[:3] == ["roar", "put", "artifacts/lda-robocasa-canary/release"]
+    assert "--anonymous" not in args
     assert "--private --yes --no-tag" in publish
     assert "--public" not in publish
     assert "hf upload" not in publish
@@ -108,13 +117,14 @@ def test_workflow_hard_bounds_external_operations():
     }
     for stage, seconds in stage_timeouts.items():
         command = workflow[stage]["command"]
-        assert f"{hard_timeout} {seconds} roar run -n {stage} -- env" in command
+        prefix = "env" if stage == "train" else f"roar run -n {stage} -- env"
+        assert f"{hard_timeout} {seconds} {prefix}" in command
         assert "roar run" not in command.split("timeout", 1)[0]
 
     assert f"{hard_timeout} 180 roar label set" in workflow["label"]["command"]
     publish_lines = workflow["publish"]["command"].splitlines()
     assert any(f"{hard_timeout} 180 roar status --untracked-dirs" in line for line in publish_lines)
-    assert sum(f"{hard_timeout} 1800 roar put" in line for line in publish_lines) == 2
+    assert sum(line.startswith("roar put artifacts/lda-robocasa-canary/release ") for line in publish_lines) == 1
 
 
 def test_workflow_stage_commands_are_valid_bash():

@@ -18,7 +18,17 @@ APACHE_LICENSE_SHA256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb00341
 DATASET_PATH = ROOT / "playground" / "demo_data" / "sim_pick_place"
 EXPECTED_EPISODES = 4
 
-PUBLICATION_REPO_ID = "reproducible-ai/harness-test-lda-robocasa-issue-5"
+# Read the supervisor-rewritten destination so preflight and package agree.
+def publication_repo_id():
+    import re
+    workflow = (ROOT / ".treqs/workflows/robocasa-demo-canary.yaml").read_text()
+    destinations = re.findall(r"hf://([^/\s]+/[^/\s]+)", workflow)
+    if len(destinations) != 1:
+        raise RuntimeError("Expected one private publication destination")
+    return destinations[0]
+
+
+PUBLICATION_REPO_ID = publication_repo_id()
 PUBLICATION_VERSION = "robocasa-demo-canary-0.0.1"
 
 ARTIFACT_ROOT = ROOT / "artifacts" / "lda-robocasa-canary"

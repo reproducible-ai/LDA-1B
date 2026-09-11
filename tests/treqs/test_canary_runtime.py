@@ -225,6 +225,7 @@ def configure_packager(monkeypatch, tmp_path, *, include_dino_license: bool):
             {
                 "status": "passed",
                 "global_step": 1,
+                "optimizer_steps_completed": 1,
                 "checkpoint": {"sha256": sha256_file(trained_checkpoint)},
             }
         )
@@ -325,3 +326,14 @@ def test_packager_bundles_and_discloses_component_licenses(monkeypatch, tmp_path
         "Apache-2.0",
         "LicenseRef-DINOv3",
     }
+
+    result = json.loads((release_root / "checkpoints/result.json").read_text())
+    assert result["optimizerSteps"] == 1
+    manifest = json.loads((release_root / "checkpoints/artifact-manifest.json").read_text())
+    expected = {str(p.relative_to(release_root)) for p in release_root.rglob("*")
+                if p.is_file() and p.name != "artifact-manifest.json"}
+    assert {record["path"] for record in manifest["files"]} == expected
+    for record in manifest["files"]:
+        path = release_root / record["path"]
+        assert record["sha256"] == sha256_file(path)
+        assert record["size"] == path.stat().st_size

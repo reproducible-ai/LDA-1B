@@ -204,6 +204,22 @@ def main() -> None:
         "evaluation": evaluation,
     }
     (RELEASE_ROOT / "publication.json").write_text(json.dumps(publication, indent=2, sort_keys=True) + "\n")
+    result = dict(evaluation)
+    result["optimizerSteps"] = evaluation["optimizer_steps_completed"]
+    result["claim"] = "Private non-commercial training-path canary only; no model-quality claim."
+    (RELEASE_CHECKPOINT.parent / "result.json").write_text(
+        json.dumps(result, indent=2, sort_keys=True) + "\n"
+    )
+    # Manifest paths are relative to release/; upload the entire loader package.
+    records = [
+        {"path": str(path.relative_to(RELEASE_ROOT)), "size": path.stat().st_size,
+         "sha256": sha256_file(path)}
+        for path in sorted(RELEASE_ROOT.rglob("*")) if path.is_file()
+    ]
+    (RELEASE_CHECKPOINT.parent / "artifact-manifest.json").write_text(
+        json.dumps({"schema_version": 1, "format": "pytorch-state-dict",
+                    "path_base": "release", "files": records}, indent=2, sort_keys=True) + "\n"
+    )
     print(f"Packaged release for hf://{PUBLICATION_REPO_ID}/{PUBLICATION_VERSION}")
 
 

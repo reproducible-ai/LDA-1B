@@ -29,8 +29,9 @@ DINO tensor comes from the starting LDA checkpoint.
 
 ## Lineage DAG
 
-The four traced workload stages are explicit named `roar run` operations, while
-TReqs tracing is off to avoid nested tracer graphs. Label and publish then use
+The workflow uses a supervisor-managed training trace (`trace: run`) with a plain
+training command. Fetch, evaluate, and package use explicit named `roar run` operations
+with TReqs tracing off. Label and publish then use
 ROAR's metadata and storage commands directly against those captured artifacts:
 
 1. `fetch` downloads exact LDA/Qwen revisions and the exact pinned DINOv3
@@ -45,7 +46,17 @@ ROAR's metadata and storage commands directly against those captured artifacts:
 5. `label` attaches model, version, license, description, and documentation
    metadata to the released checkpoint;
 6. `publish` receives GLaaS credentials and publishes privately through `roar put`
-   to `hf://reproducible-ai/harness-test-lda-robocasa-issue-5/robocasa-demo-canary-0.0.1`.
+   as one complete release directory upload. The supervisor replaces the placeholder
+   repository in the workflow; preflight derives its repository from that destination.
+   `checkpoints/result.json` records `optimizerSteps`, and
+   `checkpoints/artifact-manifest.json` hashes all other release files, including
+   loader metadata and component notices. Independent audit remains the supervisor's task.
+
+The supervisor must enforce the $15 total budget before scheduling four L40S GPUs;
+per-command timeouts alone do not establish a dollar cap.
+The publication command uses a literal release-directory source and starts directly
+with `roar put` so the supervisor can bind it. The supervisor must also bound the
+publication stage duration; this command has no shell timeout wrapper.
 
 The final DAG should be inspectable with:
 

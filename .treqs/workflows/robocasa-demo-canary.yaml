@@ -41,8 +41,8 @@ train:
   command: |
     set -euo pipefail
     export PATH="$PWD/.venv/bin:/usr/local/bin:/opt/pytorch/bin:$PATH"
-    timeout --signal=TERM --kill-after=30 3600 roar run -n train -- env PYTHONUNBUFFERED=1 HF_HOME=/tmp/lda-robocasa-hf WANDB_MODE=disabled python .treqs/scripts/run_robocasa_canary.py
-  trace: "off"
+    timeout --signal=TERM --kill-after=30 3600 env PYTHONUNBUFFERED=1 HF_HOME=/tmp/lda-robocasa-hf WANDB_MODE=disabled python .treqs/scripts/run_robocasa_canary.py
+  trace: "run"
 
 evaluate:
   command: |
@@ -79,6 +79,7 @@ publish:
     done
     test -s "$RELEASE/checkpoints/LDA-robocasa-treqs-canary.pt"
     timeout --signal=TERM --kill-after=30 180 roar status --untracked-dirs
-    timeout --signal=TERM --kill-after=30 1800 roar put "$RELEASE/README.md" "$RELEASE/LICENSE" "$RELEASE/CC-BY-NC-4.0.md" "$RELEASE/APACHE-2.0.txt" "$RELEASE/DINOv3-LICENSE.md" "$RELEASE/NOTICE" hf://reproducible-ai/harness-test-lda-robocasa-issue-5 --private --yes --no-tag -m "LDA RoboCasa canary model card and component licenses"
-    timeout --signal=TERM --kill-after=30 1800 roar put "$RELEASE" hf://reproducible-ai/harness-test-lda-robocasa-issue-5/robocasa-demo-canary-0.0.1 --private --yes --no-tag -m "LDA RoboCasa one-step TReqs reproducibility canary"
+    test -s "$RELEASE/checkpoints/artifact-manifest.json"
+    test -s "$RELEASE/checkpoints/result.json"
+    roar put artifacts/lda-robocasa-canary/release --private --yes --no-tag -m "private reproducibility canary" hf://reproducible-ai/stage-lda-1b-robocasa-d77b97bc91c4/artifacts/lda-robocasa-canary/release/checkpoints
   trace: "off"

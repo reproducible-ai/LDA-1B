@@ -81,5 +81,5 @@ publish:
     timeout --signal=TERM --kill-after=30 180 roar status --untracked-dirs
     test -s "$RELEASE/checkpoints/artifact-manifest.json"
     test -s "$RELEASE/checkpoints/result.json"
-    roar put artifacts/lda-robocasa-canary/release/checkpoints --private --yes --no-tag -m "private reproducibility canary" hf://reproducible-ai/stage-lda-1b-robocasa-5c5fa8b8de2d/artifacts/lda-robocasa-canary/release/checkpoints
+    roar put artifacts/lda-robocasa-canary/release/checkpoints --private --yes --no-tag -m "private reproducibility canary" hf://reproducible-ai/stage-lda-1b-robocasa-ddd28b4d6479/artifacts/lda-robocasa-canary/release/checkpoints
   trace: "off"

@@ -216,3 +216,49 @@ framework = (ROOT / 'lda/model/framework/QwenMMDiT.py').read_text()
 assert framework.index('examples = adapt_demo_canary_examples(') < framework.index('batch_images =')
 assert 'config["datasets"]["vla_data"]["demo_canary_adapter"] = True' in (ROOT / '.treqs/scripts/package_robocasa_canary.py').read_text()
 print('PASS: demo adapter enabled before forward input extraction and retained in loader config')
+
+# Execute the adapter itself without requiring the remote training environment.
+import runpy
+adapter = runpy.run_path(str(ROOT / 'lda/utils/demo_canary_inputs.py'))
+fixture = ROOT / '.treqs/assets/robocasa-pinned-config.yaml'
+contract_tree = ast.parse(contract_path.read_text())
+expected_hash = next(ast.literal_eval(node.value) for node in contract_tree.body
+                     if isinstance(node, ast.Assign)
+                     and any(isinstance(target, ast.Name) and target.id == 'BASE_CONFIG_SHA256'
+                             for target in node.targets))
+assert hashlib.sha256(fixture.read_bytes()).hexdigest() == expected_hash
+for name, value in dict(state_dim=58, action_dim=138, max_num_embodiments=32,
+                        obs_horizon=2, future_obs_index=16).items():
+    assert re.search(rf'^    {name}: {value}$', fixture.read_text(), re.M)
+sample = dict(state=[list(range(12)), list(range(20, 32))],
+              action=[[1.0] * 138 for _ in range(16)],
+              action_mask=[[True] * 7 + [False] * 131 for _ in range(16)],
+              embodiment_id=32, assigned_task='policy')
+kwargs = dict(state_dim=58, action_dim=138, num_embodiments=32)
+adapted = adapter['adapt_demo_canary_examples']([sample] * 4, **kwargs)
+assert len(adapted) == 4
+for example in adapted:
+    assert example['embodiment_id'] == 4
+    assert example['action'] is sample['action']
+    assert example['action_mask'] is sample['action_mask']
+    for source, padded in zip(sample['state'], example['state']):
+        assert padded == source + [0.0] * 46
+assert sample['embodiment_id'] == 32 and all(len(row) == 12 for row in sample['state'])
+for update in ({'state': [[0] * 12]}, {'action': [[0] * 7]},
+               {'embodiment_id': 4}, {'assigned_task': 'video_gen'}):
+    try:
+        adapter['adapt_demo_canary_examples']([dict(sample, **update)], **kwargs)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('Incompatible demo input accepted')
+modalities = {name: SimpleNamespace(delta_indices=indices)
+              for name, indices in dict(video=[0], state=[0], future_video=[5],
+                                        action=list(range(16))).items()}
+history = adapter['adapt_demo_canary_modalities'](modalities)
+assert history['video'].delta_indices == history['state'].delta_indices == [-5, 0]
+assert history['future_video'].delta_indices == [16]
+assert history['action'].delta_indices == list(range(16))
+assert modalities['video'].delta_indices == modalities['state'].delta_indices == [0]
+assert modalities['future_video'].delta_indices == [5]
+print('PASS: pinned config hash/dimensions, distinct state histories, zero padding, action/mask preservation, Franka slot, invalid inputs and sampling offsets (synthetic only)')

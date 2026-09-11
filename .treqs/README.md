@@ -109,10 +109,24 @@ and local validation limits. Runtime pins remain unchanged, including torchcodec
 pins have been removed. BF16 and DeepSpeed ZeRO-2 remain. The current
 SIGKILL remediation disables CPU optimizer offload (device `none`) to reduce
 host memory demand during optimizer preparation. The legacy `zero2-cpu`
-filenames are retained. Host OOM is a hypothesis, not a verified cause; GPU
-memory fit and an optimizer update still require the supervisor-run canary.
+filenames are retained. The EC2 kernel log confirmed a host OOM in issue #35;
+the GPU optimizer then initialized successfully. A completed optimizer update
+still requires the supervisor-run canary.
 This hardware adaptation does not establish hardware equivalence or full reproduction.
 
 ### Explicit batch configuration for the Blackwell canary
 
 The one-GPU canary uses batch four and one accumulation step. LDA's custom batch sampler leaves `DataLoader.batch_size` unset, so DeepSpeed must explicitly set both `train_micro_batch_size_per_gpu` and `train_batch_size` to 4. Leaving either contract to automatic inference caused campaign-queue #34 to stop after strict pretrained-checkpoint loading and before the first optimizer update. A regression test exercises a real PyTorch custom batch sampler and verifies the configured effective batch. This continuation preserves the input pins, frozen modules, BF16, and one-step schedule.
+
+### Pinned checkpoint and demo compatibility
+
+`assets/robocasa-pinned-config.yaml` is the exact config from
+`Wayer2/LDA-robocasa@811d14d8c22d3e98021c035948118143f53dd312`; input preparation
+verifies its SHA-256. It defines state width 58, action width 138, 32 embodiment
+slots, and two observation frames. The explicit demo adapter preserves all
+12 source state values, zero-pads the remaining 46, retains loader-padded
+actions and their mask, and maps the demo's `franka_robotiq` metadata to existing
+Franka slot 4. It samples video/state history at [-5, 0] and future video at 16
+through the existing dataset loader. Checkpoint shapes and strict loading are
+unchanged. This establishes a training compatibility canary only; it does not
+establish matching embodiment semantics, policy quality, or full reproduction.

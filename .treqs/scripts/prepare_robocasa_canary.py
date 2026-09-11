@@ -13,6 +13,7 @@ from lda_canary_contract import (
     ARTIFACT_ROOT,
     BASE_CHECKPOINT,
     BASE_CHECKPOINT_NAME,
+    BASE_CONFIG_SHA256,
     BASE_MODEL_ID,
     BASE_MODEL_REVISION,
     BASE_SNAPSHOT,
@@ -91,6 +92,8 @@ def main() -> None:
             BASE_CHECKPOINT_NAME,
         ],
     )
+    if sha256_file(BASE_SNAPSHOT / "config.yaml") != BASE_CONFIG_SHA256:
+        raise RuntimeError("Pinned RoboCasa config hash mismatch")
     source_checkpoint = BASE_SNAPSHOT / BASE_CHECKPOINT_NAME
     BASE_CHECKPOINT.parent.mkdir(parents=True, exist_ok=True)
     if not source_checkpoint.is_file():

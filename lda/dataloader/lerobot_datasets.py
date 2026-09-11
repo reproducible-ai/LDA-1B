@@ -101,6 +101,11 @@ def make_LeRobotSingleDataset(
     
     data_config = ROBOT_TYPE_CONFIG_MAP[robot_type] # in data_config.py
     modality_config = data_config.modality_config()
+    if data_cfg and data_cfg.get("demo_canary_adapter", False):
+        if robot_type != "demo_data":
+            raise ValueError("The demo canary adapter requires demo_data")
+        from lda.utils.demo_canary_inputs import adapt_demo_canary_modalities
+        modality_config = adapt_demo_canary_modalities(modality_config)
     transforms = data_config.transform()
     dataset_path = data_root_dir / data_name
     if robot_type not in ROBOT_TYPE_TO_EMBODIMENT_TAG:

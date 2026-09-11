@@ -108,3 +108,7 @@ and local validation limits. Runtime pins remain unchanged, including torchcodec
 0.8.1. PyTorch resolves its compatible CUDA dependencies; the obsolete CUDA 12.4
 pins have been removed. BF16 and DeepSpeed ZeRO-2 CPU optimizer offload remain.
 This hardware adaptation does not establish hardware equivalence or full reproduction.
+
+### Explicit batch configuration for the Blackwell canary
+
+The one-GPU canary uses batch four and one accumulation step. LDA's custom batch sampler leaves `DataLoader.batch_size` unset, so DeepSpeed must explicitly set both `train_micro_batch_size_per_gpu` and `train_batch_size` to 4. Leaving either contract to automatic inference caused campaign-queue #34 to stop after strict pretrained-checkpoint loading and before the first optimizer update. A regression test exercises a real PyTorch custom batch sampler and verifies the configured effective batch. This continuation preserves the input pins, frozen modules, BF16, and one-step schedule.

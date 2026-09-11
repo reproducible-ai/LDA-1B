@@ -327,6 +327,8 @@ def test_qwen_wrapper_honors_configured_attention_backend():
 
 
 def test_deepspeed_config_offloads_optimizer_and_gathers_checkpoint():
+    from torch.utils.data import BatchSampler, DataLoader, SequentialSampler
+
     config = yaml.safe_load((ASSETS / "accelerate-zero2-cpu.yaml").read_text())
     assert config["distributed_type"] == "DEEPSPEED"
     assert config["num_processes"] == 1
@@ -334,7 +336,16 @@ def test_deepspeed_config_offloads_optimizer_and_gathers_checkpoint():
     ds = yaml.safe_load(ds_path.read_text())
     assert ds["zero_optimization"]["stage"] == 2
     assert ds["zero_optimization"]["offload_optimizer"]["device"] == "cpu"
-    assert ds["train_micro_batch_size_per_gpu"] == "auto"
+    # LDA uses a custom batch sampler, so Accelerate cannot infer loader.batch_size.
+    dataset = list(range(4))
+    loader = DataLoader(dataset, batch_sampler=BatchSampler(SequentialSampler(dataset), 4, False))
+    assert loader.batch_size is None
+    assert ds["train_micro_batch_size_per_gpu"] == len(next(iter(loader)))
+    assert ds["train_batch_size"] == (
+        ds["train_micro_batch_size_per_gpu"]
+        * ds["gradient_accumulation_steps"]
+        * config["num_processes"]
+    )
 
 
 def test_accelerate_accepts_file_owned_bf16_configuration(monkeypatch):

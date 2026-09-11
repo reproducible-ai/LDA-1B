@@ -454,6 +454,7 @@ class VLATrainer(TrainerUtils):
 
     def _train_step(self, batch_vla, batch_vlm=None):
         """execute single training step"""
+        output_dict = None
         try:
             with self.accelerator.accumulate(self.model):
                 self.optimizer.zero_grad()

@@ -80,6 +80,13 @@ class Qwen_MMDiT(baseframework):
     ) -> Tuple:
         """
         """
+        if self.config.datasets.vla_data.get("demo_canary_adapter", False):
+            from lda.utils.demo_canary_inputs import adapt_demo_canary_examples
+            cfg = self.config.framework.action_model
+            examples = adapt_demo_canary_examples(
+                examples, state_dim=cfg.state_dim, action_dim=cfg.action_dim,
+                num_embodiments=cfg.get("max_num_embodiments", 1),
+            )
         batch_images = [example["image"] for example in examples]  #  [B，[PLT]]
         instructions = [example["lang"] for example in examples]  # [B, str]
         actions = [example["action"] for example in examples]  # label [B， len, action_dim]

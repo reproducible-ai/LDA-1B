@@ -66,3 +66,11 @@ Use and redistribution must comply with all applicable component terms. Upstream
 model cards are included under `upstream/` for provenance and attribution.
 
 **Built with DINOv3.**
+
+The private demo training adapter preserves the 12 source state values and
+right-pads them with 46 zeros for the checkpoint's 58-wide state encoder. It
+routes demo NEW_EMBODIMENT ID 32 to existing Franka slot 4 (the committed data
+identifies `franka_robotiq`). Actions retain the loader's 29-wide padding and
+mask. This shape-only canary adaptation does not establish RoboCasa feature
+semantics or policy quality and does not resize checkpoint tensors. It is
+recorded as `datasets.vla_data.demo_canary_adapter: true` in the packaged config.

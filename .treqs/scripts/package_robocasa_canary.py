@@ -178,6 +178,7 @@ def main() -> None:
     config["trainer"]["freeze_modules"] = "action_model.vision_encoder,qwen_vl_interface"
     config["datasets"]["vla_data"]["data_root_dir"] = "playground/demo_data"
     config["datasets"]["vla_data"]["data_mix"] = "demo_data"
+    config["datasets"]["vla_data"]["demo_canary_adapter"] = True
     config["datasets"]["vla_data"]["per_device_batch_size"] = 4
     config["trainer"]["gradient_accumulation_steps"] = 1
     config["datasets"]["vla_data"]["training_tasks"] = ["policy"]

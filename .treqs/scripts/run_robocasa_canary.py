@@ -60,6 +60,7 @@ def main() -> None:
         "--framework.action_model.only_wo_video_gen", "false",
         "--datasets.vla_data.data_root_dir", "playground/demo_data",
         "--datasets.vla_data.data_mix", "demo_data",
+        "--datasets.vla_data.demo_canary_adapter", "true",
         "--datasets.vla_data.per_device_batch_size", "4",
         "--datasets.vla_data.training_tasks", '["policy"]',
         "--datasets.vla_data.training_task_weights", "[1.0]",

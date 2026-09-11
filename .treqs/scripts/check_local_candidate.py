@@ -211,3 +211,8 @@ assert ds['fp16']['enabled'] is False and ds['gradient_clipping'] == 1.0
 print('PASS: DeepSpeed exclusively owns precision, accumulation, clipping and ZeRO settings')
 assert 'test "${GPU_COUNT}" = "1"' in stages['setup'][1]
 print('PASS: single Blackwell launch, effective batch four, frozen encoders, strict load, six invalid runtimes, dependency pins, BF16/offload configuration (mocked only)')
+assert options['--datasets.vla_data.demo_canary_adapter'] == 'true'
+framework = (ROOT / 'lda/model/framework/QwenMMDiT.py').read_text()
+assert framework.index('examples = adapt_demo_canary_examples(') < framework.index('batch_images =')
+assert 'config["datasets"]["vla_data"]["demo_canary_adapter"] = True' in (ROOT / '.treqs/scripts/package_robocasa_canary.py').read_text()
+print('PASS: demo adapter enabled before forward input extraction and retained in loader config')

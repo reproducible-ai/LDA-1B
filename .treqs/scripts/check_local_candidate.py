@@ -196,6 +196,9 @@ assert not any(line.startswith('nvidia-') and not line.startswith('nvidia-ml-py=
 assert 'num_processes: 1' in (ROOT / '.treqs/assets/accelerate-zero2-cpu.yaml').read_text()
 ds = json.loads((ROOT / '.treqs/assets/deepspeed-zero2-cpu.json').read_text())
 assert ds['gradient_accumulation_steps'] == 1 and ds['bf16']['enabled'] is True
+assert ds['train_micro_batch_size_per_gpu'] == 4
+assert ds['train_batch_size'] == ds['train_micro_batch_size_per_gpu'] * ds['gradient_accumulation_steps'] == 4
+print('PASS: explicit DeepSpeed micro/global batch sizes remain four for the custom batch sampler')
 assert ds['zero_optimization']['offload_optimizer']['device'] == 'cpu'
 accelerate_text = (ROOT / '.treqs/assets/accelerate-zero2-cpu.yaml').read_text()
 ds_owned = {'mixed_precision', 'gradient_accumulation_steps', 'gradient_clipping',

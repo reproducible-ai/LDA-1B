@@ -13,7 +13,7 @@ setup:
     command -v uv >/dev/null
     rm -rf .venv
     timeout --signal=TERM --kill-after=30 180 uv venv --python 3.11 .venv
-    timeout --signal=TERM --kill-after=30 3000 uv pip install --python .venv/bin/python -r requirements.txt
+    timeout --signal=TERM --kill-after=30 3000 uv pip install --python .venv/bin/python --index-strategy unsafe-best-match -r requirements.txt
     timeout --signal=TERM --kill-after=30 180 uv pip install --python .venv/bin/python pytest==8.4.2 pyyaml==6.0.3
     timeout --signal=TERM --kill-after=30 180 uv pip install --python .venv/bin/python --no-deps -e .
     timeout --signal=TERM --kill-after=30 300 uv tool install --python 3.11 --force --with 'huggingface-hub==0.36.0' roar-cli==0.4.5

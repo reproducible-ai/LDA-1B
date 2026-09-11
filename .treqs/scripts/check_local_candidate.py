@@ -18,6 +18,17 @@ for match in re.finditer(r'^([a-z]+):\n((?:[ \t].*\n|\n)+)', workflow, re.M):
     subprocess.run(['bash', '-n'], input=command, text=True, check=True)
     stages[name] = (body, command)
 assert set(stages) == {'setup', 'fetch', 'train', 'evaluate', 'package', 'label', 'publish'}
+# PyTorch's index also serves general packages, sometimes missing our exact pins.
+# uv must consider PyPI too rather than stop at the first index containing a name.
+installs = [shlex.split(line) for line in stages['setup'][1].splitlines()
+            if '-r requirements.txt' in line]
+assert len(installs) == 1
+install = installs[0]
+assert install[install.index('--index-strategy') + 1] == 'unsafe-best-match'
+requirements_text = (ROOT / 'requirements.txt').read_text()
+assert '--extra-index-url https://download.pytorch.org/whl/cu128' in requirements_text
+assert 'certifi==2025.11.12' in requirements_text
+print('PASS: requirements install considers both package indexes without changing pins')
 assert set(re.findall(r'^([a-z_]+):', workflow, re.M)) == set(stages) | {'name', 'secrets'}
 assert 'trace: "run"' in stages['train'][0]
 assert 'roar' not in stages['train'][1]

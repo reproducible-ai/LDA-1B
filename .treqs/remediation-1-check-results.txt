@@ -1,0 +1,4 @@
+PASS: requirements install considers both package indexes without changing pins
+PASS: HF_TOKEN declaration, seven stage shell syntax checks, private upload contract, Python syntax, repository replacement
+PASS: receipt markers, metric, complete package hashes, repeat writes, invalid step rejection
+PASS: single Blackwell launch, effective batch four, frozen encoders, strict load, six invalid runtimes, dependency pins, BF16/offload configuration (mocked only)

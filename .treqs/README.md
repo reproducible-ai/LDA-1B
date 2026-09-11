@@ -100,6 +100,11 @@ Retain the original private package for independent verification. Paths in the
 manifest are relative to the published checkpoint directory, without traversal.
 
 Runtime pins are PyTorch 2.9.0+cu128, torchvision 0.24.0+cu128, and torchcodec
+0.8.1. The requirements install uses uv's `--index-strategy unsafe-best-match`
+to consider both PyPI and the PyTorch CUDA index for exact pinned versions.
+The default first-index strategy stopped at the CUDA index's incomplete certifi
+versions in the supplied failed-run log. See `remediation-1-notes.md` for the fix
+and local validation limits. Runtime pins remain unchanged, including torchcodec
 0.8.1. PyTorch resolves its compatible CUDA dependencies; the obsolete CUDA 12.4
 pins have been removed. BF16 and DeepSpeed ZeRO-2 CPU optimizer offload remain.
 This hardware adaptation does not establish hardware equivalence or full reproduction.

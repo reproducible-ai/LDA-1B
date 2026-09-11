@@ -168,12 +168,14 @@ class VLATrainer(TrainerUtils):
         self.print_trainable_parameters(self.model)
 
         # initialize distributed training components
+        logger.info("Starting distributed model/optimizer/dataloader preparation")
         self.model, self.optimizer, self.train_dataloader = self.setup_distributed_training(
             self.accelerator,  # must be the first param
             self.model,
             self.optimizer,
             self.train_dataloader,
         )
+        logger.info("Completed distributed model/optimizer/dataloader preparation")
         self._init_wandb()
 
 

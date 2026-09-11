@@ -1,4 +1,5 @@
 compute_environment: LOCAL_MACHINE
+# Legacy filenames retained; optimizer offload is disabled in the JSON config.
 debug: false
 deepspeed_config:
   deepspeed_config_file: .treqs/assets/deepspeed-zero2-cpu.json

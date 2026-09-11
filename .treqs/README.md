@@ -106,7 +106,11 @@ The default first-index strategy stopped at the CUDA index's incomplete certifi
 versions in the supplied failed-run log. See `remediation-1-notes.md` for the fix
 and local validation limits. Runtime pins remain unchanged, including torchcodec
 0.8.1. PyTorch resolves its compatible CUDA dependencies; the obsolete CUDA 12.4
-pins have been removed. BF16 and DeepSpeed ZeRO-2 CPU optimizer offload remain.
+pins have been removed. BF16 and DeepSpeed ZeRO-2 remain. The current
+SIGKILL remediation disables CPU optimizer offload (device `none`) to reduce
+host memory demand during optimizer preparation. The legacy `zero2-cpu`
+filenames are retained. Host OOM is a hypothesis, not a verified cause; GPU
+memory fit and an optimizer update still require the supervisor-run canary.
 This hardware adaptation does not establish hardware equivalence or full reproduction.
 
 ### Explicit batch configuration for the Blackwell canary

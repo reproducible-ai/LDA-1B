@@ -326,7 +326,7 @@ def test_qwen_wrapper_honors_configured_attention_backend():
     assert source.count("revision=revision") == 2
 
 
-def test_deepspeed_config_offloads_optimizer_and_gathers_checkpoint():
+def test_deepspeed_config_keeps_optimizer_on_gpu_and_explicit_batches():
     from torch.utils.data import BatchSampler, DataLoader, SequentialSampler
 
     config = yaml.safe_load((ASSETS / "accelerate-zero2-cpu.yaml").read_text())
@@ -335,7 +335,8 @@ def test_deepspeed_config_offloads_optimizer_and_gathers_checkpoint():
     ds_path = ROOT / config["deepspeed_config"]["deepspeed_config_file"]
     ds = yaml.safe_load(ds_path.read_text())
     assert ds["zero_optimization"]["stage"] == 2
-    assert ds["zero_optimization"]["offload_optimizer"]["device"] == "cpu"
+    assert ds["zero_optimization"]["offload_optimizer"]["device"] == "none"
+    assert "pin_memory" not in ds["zero_optimization"]["offload_optimizer"]
     # LDA uses a custom batch sampler, so Accelerate cannot infer loader.batch_size.
     dataset = list(range(4))
     loader = DataLoader(dataset, batch_sampler=BatchSampler(SequentialSampler(dataset), 4, False))

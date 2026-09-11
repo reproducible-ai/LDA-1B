@@ -199,7 +199,8 @@ assert ds['gradient_accumulation_steps'] == 1 and ds['bf16']['enabled'] is True
 assert ds['train_micro_batch_size_per_gpu'] == 4
 assert ds['train_batch_size'] == ds['train_micro_batch_size_per_gpu'] * ds['gradient_accumulation_steps'] == 4
 print('PASS: explicit DeepSpeed micro/global batch sizes remain four for the custom batch sampler')
-assert ds['zero_optimization']['offload_optimizer']['device'] == 'cpu'
+assert ds['zero_optimization']['offload_optimizer']['device'] == 'none'
+assert 'pin_memory' not in ds['zero_optimization']['offload_optimizer']
 accelerate_text = (ROOT / '.treqs/assets/accelerate-zero2-cpu.yaml').read_text()
 ds_owned = {'mixed_precision', 'gradient_accumulation_steps', 'gradient_clipping',
             'zero_stage', 'offload_optimizer_device', 'offload_param_device',

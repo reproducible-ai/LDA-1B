@@ -9,7 +9,8 @@ downcast_bf16: "no"
 enable_cpu_affinity: false
 machine_rank: 0
 main_training_function: main
-mixed_precision: bf16
+# Precision is owned by deepspeed-zero2-cpu.json. Accelerate rejects
+# mixed_precision here when deepspeed_config_file is supplied.
 num_machines: 1
 num_processes: 1
 rdzv_backend: static

@@ -337,6 +337,26 @@ def test_deepspeed_config_offloads_optimizer_and_gathers_checkpoint():
     assert ds["train_micro_batch_size_per_gpu"] == "auto"
 
 
+def test_accelerate_accepts_file_owned_bf16_configuration(monkeypatch):
+    from accelerate import DeepSpeedPlugin
+
+    config = yaml.safe_load((ASSETS / "accelerate-zero2-cpu.yaml").read_text())
+    ds_config = config["deepspeed_config"]
+    # Reproduce the launcher's config-field environment without launching workers.
+    monkeypatch.setenv("ACCELERATE_CONFIG_DS_FIELDS", ",".join(config.keys() | ds_config.keys()))
+    monkeypatch.setenv("ACCELERATE_DEEPSPEED_CONFIG_FILE", str(ROOT / ds_config["deepspeed_config_file"]))
+    monkeypatch.setenv("ACCELERATE_DEEPSPEED_ZERO3_INIT", "false")
+    plugin = DeepSpeedPlugin()
+    assert plugin.deepspeed_config["bf16"]["enabled"] is True
+    assert plugin.deepspeed_config["fp16"]["enabled"] is False
+    assert plugin.deepspeed_config["gradient_accumulation_steps"] == 1
+    # The former duplicate must reproduce the observed initialization failure.
+    monkeypatch.setenv("ACCELERATE_CONFIG_DS_FIELDS", "mixed_precision")
+    import pytest
+    with pytest.raises(ValueError, match="mixed_precision"):
+        DeepSpeedPlugin()
+
+
 def test_dependency_free_candidate_contracts():
     import sys
     subprocess.run([sys.executable, str(SCRIPTS / "check_local_candidate.py")],

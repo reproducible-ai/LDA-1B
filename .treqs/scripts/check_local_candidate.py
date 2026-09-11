@@ -197,5 +197,13 @@ assert 'num_processes: 1' in (ROOT / '.treqs/assets/accelerate-zero2-cpu.yaml').
 ds = json.loads((ROOT / '.treqs/assets/deepspeed-zero2-cpu.json').read_text())
 assert ds['gradient_accumulation_steps'] == 1 and ds['bf16']['enabled'] is True
 assert ds['zero_optimization']['offload_optimizer']['device'] == 'cpu'
+accelerate_text = (ROOT / '.treqs/assets/accelerate-zero2-cpu.yaml').read_text()
+ds_owned = {'mixed_precision', 'gradient_accumulation_steps', 'gradient_clipping',
+            'zero_stage', 'offload_optimizer_device', 'offload_param_device',
+            'offload_param_nvme_path', 'offload_optimizer_nvme_path',
+            'zero3_save_16bit_model'}
+assert not ds_owned.intersection(re.findall(r'^\s*([a-z_0-9]+):', accelerate_text, re.M))
+assert ds['fp16']['enabled'] is False and ds['gradient_clipping'] == 1.0
+print('PASS: DeepSpeed exclusively owns precision, accumulation, clipping and ZeRO settings')
 assert 'test "${GPU_COUNT}" = "1"' in stages['setup'][1]
 print('PASS: single Blackwell launch, effective batch four, frozen encoders, strict load, six invalid runtimes, dependency pins, BF16/offload configuration (mocked only)')

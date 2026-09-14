@@ -111,7 +111,14 @@ ROAR's metadata and storage commands directly against those captured artifacts:
    `checkpoints/artifact-manifest.json` hashes all other published files using checkpoint-directory-relative paths, including
    loader metadata and component notices. Independent audit remains the supervisor's task.
 
-The supervisor must enforce the $15 total budget before scheduling the single Blackwell GPU;
+For issue 38, the supervisor must enforce a $5 attempt cap including setup,
+retries, and shutdown before scheduling the single Blackwell GPU. Prior finalized
+cost is $5, leaving $10 of the original $15 approval; this attempt may use at most $5.
+Require fresh full published lineage including train and evaluate, independent
+checkpoint readback, exact result-sidecar equality, and independent auditor PASS.
+Retain issue 36 and blocked issue 37 artifacts and evidence. Intervention after
+launch disqualifies an unattended-success claim. Local notes stay in this workspace.
+The supervisor owns dollar-budget enforcement;
 per-command timeouts alone do not establish a dollar cap.
 The publication command uses one literal checkpoint-directory source and starts directly
 with `roar put` so the supervisor can bind it. The supervisor must also bound the

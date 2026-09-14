@@ -95,7 +95,14 @@ with tempfile.TemporaryDirectory(dir=ROOT) as directory:
         path = release / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('fixture: ' + name)
-    evaluation = {'status': 'passed', 'optimizer_steps_completed': 1, 'loadVerified': True, 'checkpoint': {'sha256': hashlib.sha256(checkpoint.read_bytes()).hexdigest()}}
+    evaluation = {
+        'status': 'passed', 'optimizer_steps_completed': 1, 'loadVerified': True,
+        'base_checkpoint': {'path': 'artifacts/lda-robocasa-canary/inputs/LDA-robocasa/checkpoints/LDA-robocasa.pt'},
+        'checkpoint': {
+            'path': 'artifacts/lda-robocasa-canary/training/robocasa-demo-canary/checkpoints/steps_1_pytorch_model.pt',
+            'sha256': hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
+        },
+    }
     output = io.StringIO()
     with contextlib.redirect_stdout(output):
         namespace['write_receipts'](release, checkpoint, evaluation)
@@ -106,6 +113,10 @@ with tempfile.TemporaryDirectory(dir=ROOT) as directory:
     artifact = json.loads(receipts[0].removeprefix('E2E_ARTIFACT='))
     result = json.loads(receipts[1].removeprefix('E2E_RESULT='))
     assert result == json.loads(result_path.read_text())
+    assert json.loads(receipts[3].removeprefix('E2E_RESULT=')) == result
+    assert json.loads(receipts[1].removeprefix('E2E_RESULT=').replace(str(ROOT), '[REDACTED]')) == result
+    assert result['evaluation'] == evaluation
+    assert not Path(result['checkpoint']).is_absolute()
     assert result['schema'] == 'reproai.result/v1'
     assert result['optimizerSteps'] == 1
     assert result['taskMetric'] == {'metric': 'optimizerSteps', 'minimum': 1}
@@ -142,6 +153,20 @@ with tempfile.TemporaryDirectory(dir=ROOT) as directory:
         else:
             raise AssertionError('Invalid optimizer step count accepted')
 print('PASS: receipt markers, metric, complete package hashes, repeat writes, invalid step rejection')
+
+# Protect the evaluation paths that previously broke exact sidecar comparison
+# after supervisor log redaction. Inspect the actual result construction.
+verifier_path = ROOT / '.treqs/scripts/verify_robocasa_canary.py'
+verifier_tree = ast.parse(verifier_path.read_text())
+result_node = next(node.value for node in ast.walk(verifier_tree)
+                   if isinstance(node, ast.Assign)
+                   and any(isinstance(target, ast.Name) and target.id == 'result'
+                           for target in node.targets))
+fields = {key.value: value for key, value in zip(result_node.keys, result_node.values)}
+for field, constant in (('base_checkpoint', 'BASE_CHECKPOINT'), ('checkpoint', 'TRAINED_CHECKPOINT')):
+    nested = {key.value: value for key, value in zip(fields[field].keys, fields[field].values)}
+    assert ast.unparse(nested['path']) == f'str({constant}.relative_to(ROOT))'
+print('PASS: nested evaluation paths stay repository-relative and full result equality survives workspace redaction')
 
 # Exercise actual runtime validation and launch construction with no CUDA workload.
 from types import SimpleNamespace

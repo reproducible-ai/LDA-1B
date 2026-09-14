@@ -102,6 +102,7 @@ def test_verifier_accepts_a_tiny_one_step_checkpoint_and_records_the_change(
     )
     evaluation_path = run_dir / "evaluation.json"
     for name, value in {
+        "ROOT": tmp_path,
         "INPUT_MANIFEST_PATH": manifest_path,
         "BASE_CHECKPOINT": base_checkpoint,
         "TRAINED_CHECKPOINT": trained_checkpoint,
@@ -122,6 +123,12 @@ def test_verifier_accepts_a_tiny_one_step_checkpoint_and_records_the_change(
     assert result["optimizer_steps_completed"] == 1
     assert result["checkpoint"]["changed_tensor"] == "action_model.weight"
     assert result["base_checkpoint"]["sha256"] != result["checkpoint"]["sha256"]
+    assert result["base_checkpoint"]["path"] == str(base_checkpoint.relative_to(tmp_path))
+    assert result["checkpoint"]["path"] == str(trained_checkpoint.relative_to(tmp_path))
+    # TReqs redacts the machine's workspace root in logs. The published result
+    # and its logged receipt must remain identical after that redaction.
+    serialized = json.dumps(result, sort_keys=True)
+    assert serialized.replace(str(tmp_path), "[REDACTED]") == serialized
 
 
 def test_hf_preflight_rejects_a_public_destination_before_preupload(monkeypatch):

@@ -15,6 +15,7 @@ from lda_canary_contract import (
     EVALUATION_PATH,
     INPUT_MANIFEST_PATH,
     QWEN_SNAPSHOT,
+    ROOT,
     RUN_DIR,
     TRAINED_CHECKPOINT,
 )
@@ -131,12 +132,12 @@ def main() -> None:
         "global_step": global_step,
         "optimizer_steps_completed": optimizer_steps_completed,
         "base_checkpoint": {
-            "path": str(BASE_CHECKPOINT),
+            "path": str(BASE_CHECKPOINT.relative_to(ROOT)),
             "size": BASE_CHECKPOINT.stat().st_size,
             "sha256": base_sha256,
         },
         "checkpoint": {
-            "path": str(TRAINED_CHECKPOINT),
+            "path": str(TRAINED_CHECKPOINT.relative_to(ROOT)),
             "size": TRAINED_CHECKPOINT.stat().st_size,
             "sha256": checkpoint_sha256,
             "tensor_count": len(trained_state),

@@ -15,6 +15,9 @@ generation using synthetic files, including markers, metric, and package hashes.
 The package emits E2E_ARTIFACT and E2E_RESULT and preserves loader metadata and
 component notices as physical files under checkpoints/loader, inventoried in the artifact manifest. These local checks
 do not establish GPU execution or constitute the independent artifact audit.
+Evaluation checkpoint paths are relative to the source repository. This preserves
+exact agreement between the published result and the logged receipt when TReqs
+redacts machine-local workspace prefixes.
 See `iteration-1-notes.md` for checks run and current limitations.
 
 This private platform canary fine-tunes the pinned `Wayer2/LDA-robocasa` checkpoint for exactly

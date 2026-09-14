@@ -11,19 +11,15 @@ setup:
     test "${GPU_COUNT}" = "1"
     timeout --signal=TERM --kill-after=30 180 python3 -m pip install --user --disable-pip-version-check uv==0.12.3
     command -v uv >/dev/null
+    timeout --signal=TERM --kill-after=30 1200 bash .treqs/scripts/install_roar_source.sh
+    export PATH="/usr/local/bin:${PATH}"
     rm -rf .venv
     timeout --signal=TERM --kill-after=30 180 uv venv --python 3.11 .venv
     timeout --signal=TERM --kill-after=30 3000 uv pip install --python .venv/bin/python --index-strategy unsafe-best-match -r requirements.txt
     timeout --signal=TERM --kill-after=30 180 uv pip install --python .venv/bin/python pytest==8.4.2 pyyaml==6.0.3
     timeout --signal=TERM --kill-after=30 180 uv pip install --python .venv/bin/python --no-deps -e .
-    timeout --signal=TERM --kill-after=30 300 uv tool install --python 3.11 --force --with 'huggingface-hub==0.36.0' roar-cli==0.4.5
-    if command -v sudo >/dev/null 2>&1; then
-      sudo -n ln -sf "$(command -v roar)" /usr/local/bin/roar
-    else
-      ln -sf "$(command -v roar)" /usr/local/bin/roar
-    fi
     ROAR_VERSION="$(timeout --signal=TERM --kill-after=30 60 env PATH=/usr/local/bin:/usr/bin:/bin roar --version)"
-    test "${ROAR_VERSION}" = "roar, version 0.4.5"
+    test "${ROAR_VERSION}" = "roar, version 0.4.7"
     timeout --signal=TERM --kill-after=30 60 roar tracer use preload
     timeout --signal=TERM --kill-after=30 60 roar tracer
     timeout --signal=TERM --kill-after=30 60 roar init --no-gitignore

@@ -7,6 +7,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 workflow = (ROOT / '.treqs/workflows/robocasa-demo-canary.yaml').read_text()
+source_installer = ROOT / '.treqs/scripts/install_roar_source.sh'
+subprocess.run(['bash', '-n', str(source_installer)], check=True)
+assert re.search(r'^roar_commit=[0-9a-f]{40}$', source_installer.read_text(), re.M), \
+    'Roar source setup must pin a full commit'
+assert 'bash .treqs/scripts/install_roar_source.sh' in workflow
+assert 'roar-cli==0.4.5' not in workflow, 'setup must not downgrade the source install'
 assert re.search(r'^secrets:\n(?:[ \t]*- [^\n]+\n)*[ \t]*- HF_TOKEN\n', workflow, re.M), \
     'workflow must declare the HF_TOKEN secret for roar put'
 stages = {}

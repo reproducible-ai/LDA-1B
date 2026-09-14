@@ -34,7 +34,8 @@ publication.
 - DINO encoder architecture: `facebook/dinov3-vits16-pretrain-lvd1689m@114c1379950215c8b35dfcd4e90a5c251dde0d32`; its weights are supplied by the strict-loaded LDA checkpoint
 - Dataset: `playground/demo_data/sim_pick_place` (four episodes, committed in source)
 - Compute target: one 96 GB RTX PRO 6000 Blackwell GPU
-- ROAR: `roar-cli==0.4.5`, `huggingface-hub==0.36.0`, preload tracer
+- ROAR: `treqs/roar@61e5e98ca823a25c19522870cb81d3ce730c391d` (main on
+  2026-09-14, package version 0.4.7), `huggingface-hub==0.36.0`, preload tracer
 - Build backend: `setuptools==80.9.0`
 - Required target secret: `HF_TOKEN`
 
@@ -43,6 +44,44 @@ inputs, the exact DINOv3 license at the pinned revision, and write access to the
 `reproducible-ai` organization. DINOv3 is built from the vendored architecture
 plus a deterministic four-register-token config; strict loading proves every
 DINO tensor comes from the starting LDA checkpoint.
+
+### Roar source installation on existing compute targets
+
+Setup runs `scripts/install_roar_source.sh` before model dependency downloads.
+It fetches the exact main commit above and uses Roar's upstream development
+installer to build the Python extension and native tracers in a separate Python
+3.11 environment. A plain Git pip install does not build those tracer binaries.
+The model environment remains separate. `/usr/local/bin/roar` and `roar-worker`
+point at the verified install so later agent task shells select the same build.
+
+The installer checks the actual imported source, clean tracked checkout, package
+and Hugging Face versions, native binary hashes, and preload tracer preflight.
+It records `ROAR_SOURCE_BUILD=<json>` in setup logs and retains `build.json`
+under the user-base `share/reproai/roar/<commit>` directory. Matching successful
+builds are reused; altered source or cached binaries fail setup. Cold builds are
+bounded to 1,200 seconds. This adds native compilation time to a new instance.
+
+This is a workflow setup override on the existing Blackwell targets, not a
+change to their AMI or create-time TReqs bootstrap settings. Target administration
+is unavailable to the current organization member. No target recreation or API
+deployment is required. Updating the pin requires a reviewed source change;
+the installer never follows a moving `main` during a run. After a PyPI release
+includes this commit, the source build can be replaced with that exact wheel
+version. Existing issue/attempt commits remain immutable and require a new
+candidate pinned to this updated recipe before it takes effect.
+
+For an infrastructure-only Linux container check with `uv` available, run:
+
+```bash
+bash tests/treqs/verify_roar_source_install.sh /tmp/roar-install-check
+```
+
+The directory must be new. The check builds the source, reuses the validated
+cache, runs an ordinary Python file-copy command under Roar and checks its
+recorded input/output edges, then verifies rejection of modified source and
+active native binaries. It needs no GPU, model downloads, credentials or
+publication. An optional second argument reuses an existing installer cache
+while retaining a fresh directory for validation results.
 
 ## Lineage DAG
 

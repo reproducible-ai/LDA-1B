@@ -49,6 +49,13 @@ def test_build_backend_is_pinned():
     assert 'build-backend = "setuptools.build_meta"' in pyproject
 
 
+def test_setup_uses_pinned_roar_source_without_downgrading_target():
+    setup = load_workflow()["setup"]["command"]
+    assert "bash .treqs/scripts/install_roar_source.sh" in setup
+    assert "roar-cli==0.4.5" not in setup
+    assert setup.index("install_roar_source.sh") < setup.index("-r requirements.txt")
+
+
 def test_workflow_is_one_clean_lineage_dag():
     workflow = load_workflow()
     readme = (TREQS / "README.md").read_text()
@@ -57,7 +64,8 @@ def test_workflow_is_one_clean_lineage_dag():
     assert workflow["setup"]["trace"] == "off"
     setup = workflow["setup"]["command"]
     assert setup.index("check_hf_access.py") < setup.index("pip install")
-    assert "--with 'huggingface-hub==0.36.0'" in setup
+    installer = (SCRIPTS / "install_roar_source.sh").read_text()
+    assert "roar_hub_version=0.36.0" in installer
     assert "--with huggingface-hub " not in setup
     assert any(line.strip().endswith(".venv/bin/python -m pytest -q tests/treqs") for line in setup.splitlines())
     for stage in stages:
@@ -100,7 +108,7 @@ def test_workflow_hard_bounds_external_operations():
             assert hard_timeout in line
 
     setup = workflow["setup"]["command"]
-    assert f"{hard_timeout} 300 uv tool install" in setup
+    assert f"{hard_timeout} 1200 bash .treqs/scripts/install_roar_source.sh" in setup
     assert f"{hard_timeout} 60 roar tracer use preload" in setup
     assert f"{hard_timeout} 60 roar tracer" in setup
     assert f"{hard_timeout} 60 roar init --no-gitignore" in setup
@@ -109,7 +117,7 @@ def test_workflow_hard_bounds_external_operations():
     assert f"GPU_COUNT=\"$({hard_timeout} 30 nvidia-smi --list-gpus | wc -l | tr -d ' ')\"" in setup
     assert 'test "${GPU_COUNT}" = "1"' in setup
     assert f'ROAR_VERSION="$({hard_timeout} 60 env PATH=/usr/local/bin:/usr/bin:/bin roar --version)"' in setup
-    assert 'test "${ROAR_VERSION}" = "roar, version 0.4.5"' in setup
+    assert 'test "${ROAR_VERSION}" = "roar, version 0.4.7"' in setup
 
     stage_timeouts = {
         "fetch": 5400,

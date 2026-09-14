@@ -9,8 +9,8 @@ ROOT = Path(__file__).resolve().parents[2]
 workflow = (ROOT / '.treqs/workflows/robocasa-demo-canary.yaml').read_text()
 source_installer = ROOT / '.treqs/scripts/install_roar_source.sh'
 subprocess.run(['bash', '-n', str(source_installer)], check=True)
-assert re.search(r'^roar_commit=[0-9a-f]{40}$', source_installer.read_text(), re.M), \
-    'Roar source setup must pin a full commit'
+assert re.search(r'^roar_commit=61e5e98ca823a25c19522870cb81d3ce730c391d$', source_installer.read_text(), re.M), \
+    'Roar source setup must preserve the reviewed commit'
 assert 'bash .treqs/scripts/install_roar_source.sh' in workflow
 assert 'roar-cli==0.4.5' not in workflow, 'setup must not downgrade the source install'
 assert re.search(r'^secrets:\n(?:[ \t]*- [^\n]+\n)*[ \t]*- HF_TOKEN\n', workflow, re.M), \
@@ -38,6 +38,11 @@ print('PASS: requirements install considers both package indexes without changin
 assert set(re.findall(r'^([a-z_]+):', workflow, re.M)) == set(stages) | {'name', 'secrets'}
 assert 'trace: "run"' in stages['train'][0]
 assert 'roar' not in stages['train'][1]
+assert 'timeout --signal=TERM --kill-after=30 1200 bash .treqs/scripts/install_roar_source.sh' in stages['setup'][1]
+for name in ('fetch', 'evaluate', 'package'):
+    assert 'trace: "off"' in stages[name][0]
+    assert f'roar run -n {name} -- env' in stages[name][1]
+print('PASS: reviewed Roar revision, 1200-second installer bound, train trace and named lineage stages')
 body, command = stages['publish']
 assert 'glaas_creds: true' in body and 'trace: "off"' in body
 uploads = [line for line in command.splitlines() if 'roar put' in line]

@@ -15,7 +15,7 @@ generation using synthetic files, including markers, metric, and package hashes.
 The package emits E2E_ARTIFACT and E2E_RESULT and preserves loader metadata and
 component notices as physical files under checkpoints/loader, inventoried in the artifact manifest. These local checks
 do not establish GPU execution or constitute the independent artifact audit.
-See `iteration-1-notes.md` for checks run and current limitations.
+See `issue-37-iteration-1-notes.md` for current checks and handoff limitations.
 
 This private platform canary fine-tunes the pinned `Wayer2/LDA-robocasa` checkpoint for exactly
 one optimizer step on LDA's four-episode committed demo dataset. The purpose is
@@ -108,11 +108,22 @@ ROAR's metadata and storage commands directly against those captured artifacts:
    `checkpoints/artifact-manifest.json` hashes all other published files using checkpoint-directory-relative paths, including
    loader metadata and component notices. Independent audit remains the supervisor's task.
 
-The supervisor must enforce the $15 total budget before scheduling the single Blackwell GPU;
+For issue 37, the supervisor must enforce a $5 attempt cap including setup,
+retries, and shutdown before scheduling the single Blackwell GPU. Prior finalized
+cost is $3.71, leaving $11.29 of the original $15 approval; this attempt may use
+at most $5 of that remainder.
 per-command timeouts alone do not establish a dollar cap.
 The publication command uses one literal checkpoint-directory source and starts directly
 with `roar put` so the supervisor can bind it. The supervisor must also bound the
 publication stage duration; this command has no shell timeout wrapper.
+
+Require a fresh full published lineage containing train and evaluate, independent
+checkpoint readback, and an independent auditor PASS. The task packet reports
+that issue 36 completed one optimizer update but failed lineage verification;
+its cause is not established by the local evidence. Retain that checkpoint and
+all prior evidence. A supervising-agent intervention after launch disqualifies
+an unattended-success claim. Notes stay local, without notes-repository commits,
+pushes, or pull requests.
 
 The final DAG should be inspectable with:
 

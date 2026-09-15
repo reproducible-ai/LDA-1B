@@ -3,12 +3,14 @@ import hashlib
 import io
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import sys
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 PINNED = os.environ.get("PUBLIC_CANARY_SUPERVISOR_SCRIPTS")
@@ -19,6 +21,12 @@ sys.path.append(PINNED)
 import lda_public_verification as verify
 import public_lda_canary as adapter
 import public_canary_supervisor as runtime
+
+
+def test_huggingface_custom_license_name_is_a_valid_metadata_slug():
+    text = (ROOT / ".treqs/assets/robocasa-demo-canary-model-card.md").read_text()
+    metadata = yaml.safe_load(text.split("---", 2)[1])
+    assert re.fullmatch(r"[a-z0-9.-]+", metadata["license_name"])
 
 
 def test_stream_verifies_all_bytes_with_bounded_reads():

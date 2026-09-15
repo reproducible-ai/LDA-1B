@@ -236,7 +236,7 @@ def test_component_licenses_are_pinned_packaged_and_required_for_publication():
     assert "CC BY-NC 4.0; Apache 2.0; DINOv3 License" in label
 
     assert "license: other" in card
-    assert "license_name: Component-specific licensing" in card
+    assert "license_name: component-specific-licensing" in card
     assert "Built with DINOv3" in card
     assert "DINOv3-LICENSE.md" in card
     assert "APACHE-2.0.txt" in card

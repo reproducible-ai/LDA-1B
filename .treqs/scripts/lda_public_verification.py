@@ -51,7 +51,7 @@ def prepare_repository(plan, root):
         path = hf_hub_download(repo, "README.md", revision=info.sha, token=token, local_dir=str(root / "preflight"))
         require(marker in Path(path).read_text(), "Repository belongs to another publication")
     else:
-        card = ("---\nlicense: other\nlicense_name: Component-specific licensing\nlicense_link: "
+        card = ("---\nlicense: other\nlicense_name: component-specific-licensing\nlicense_link: "
                 f"https://github.com/reproducible-ai/LDA-1B/blob/{plan['sourceCommit']}/.treqs/README.md#scope\n---\n\n"
                 "# LDA-1B RoboCasa public canary\n\nA fresh one-step public canary is being prepared. "
                 "No checkpoint has passed public read-back yet.\n\nNon-commercial research only; "

@@ -1,6 +1,6 @@
 ---
 license: other
-license_name: Component-specific licensing
+license_name: component-specific-licensing
 license_link: LICENSE
 base_model: Wayer2/LDA-robocasa
 base_model_relation: finetune

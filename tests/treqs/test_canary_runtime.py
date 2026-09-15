@@ -131,17 +131,17 @@ def test_verifier_accepts_a_tiny_one_step_checkpoint_and_records_the_change(
     assert serialized.replace(str(tmp_path), "[REDACTED]") == serialized
 
 
-def test_hf_preflight_rejects_a_public_destination_before_preupload(monkeypatch):
+def test_hf_preflight_rejects_a_private_destination_before_preupload(monkeypatch):
     preflight = load_script("check_hf_access", monkeypatch)
-    monkeypatch.setattr(preflight, "request_json", lambda *_args: {"private": False})
+    monkeypatch.setattr(preflight, "request_json", lambda *_args: {"private": True})
 
     def unexpected_preupload(*_args, **_kwargs):
-        raise AssertionError("public destinations must fail before the preupload request")
+        raise AssertionError("private destinations must fail before the preupload request")
 
     monkeypatch.setattr(preflight, "urlopen", unexpected_preupload)
 
-    with pytest.raises(RuntimeError, match="must be private"):
-        preflight.check_private_writable_repo(
+    with pytest.raises(RuntimeError, match="must be public"):
+        preflight.check_public_writable_repo(
             "reproducible-ai/harness-test-lda-robocasa-issue-5",
             "not-a-real-token",
         )

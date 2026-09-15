@@ -38,7 +38,7 @@ records pinned revisions and hashes for the downloaded inputs and demo files.
 
 ## Loading layout
 
-The private package includes loader resources under `checkpoints/loader/`.
+The public package includes loader resources under `checkpoints/loader/`.
 Copy those resources to a new release root and place the published state dictionary
 under its `checkpoints/` directory to restore LDA's required layout:
 
@@ -67,7 +67,7 @@ model cards are included under `upstream/` for provenance and attribution.
 
 **Built with DINOv3.**
 
-The private demo training adapter preserves the 12 source state values and
+The demo training adapter preserves the 12 source state values and
 right-pads them with 46 zeros for the checkpoint's 58-wide state encoder. It
 routes demo NEW_EMBODIMENT ID 32 to existing Franka slot 4 (the committed data
 identifies `franka_robotiq`). Actions retain the loader's 138-wide padding and

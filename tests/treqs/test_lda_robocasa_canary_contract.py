@@ -27,7 +27,7 @@ def load_workflow() -> dict:
     return yaml.safe_load(WORKFLOW_PATH.read_text())
 
 
-def test_inputs_and_private_publication_are_immutable():
+def test_inputs_and_public_publication_are_immutable():
     contract = load_contract()
     assert contract.SOURCE_BASE_COMMIT == "06e6a274a9086cc26635a9fe663866335eb30fc5"
     assert contract.BASE_MODEL_ID == "Wayer2/LDA-robocasa"
@@ -88,10 +88,10 @@ def test_workflow_is_one_clean_lineage_dag():
     assert args.count("-m") == 1 and args[args.index("-m") + 1].strip()
     assert args[:2] == ["roar", "put"]
     assert args[2] == "artifacts/lda-robocasa-canary/release/checkpoints"
-    assert args[3:-1] == ["--private", "--yes", "--no-tag", "-m", "private reproducibility canary"]
+    assert args[3:-1] == ["--public", "--yes", "--no-tag", "-m", "public non-commercial reproducibility canary"]
     assert "--anonymous" not in args
-    assert "--private --yes --no-tag" in publish
-    assert "--public" not in publish
+    assert "--public --yes --no-tag" in publish
+    assert "--private" not in publish
     assert "hf upload" not in publish
     assert "huggingface-cli upload" not in publish
 
@@ -293,12 +293,12 @@ def test_package_is_loader_compatible_and_documents_scope():
     assert "does not authorize compute or publication" in readme
 
 
-def test_hf_preflight_requires_existing_private_writable_repo():
+def test_hf_preflight_requires_existing_public_writable_repo():
     preflight = (SCRIPTS / "check_hf_access.py").read_text()
     assert "api/models/{repo_path}" in preflight
     assert "preupload/main" in preflight
     assert 'repo_info.get("private")' in preflight
-    assert "must be private" in preflight
+    assert "must be public" in preflight
     assert "PUBLICATION_REPO_ID" in preflight
 
 

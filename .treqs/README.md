@@ -1,4 +1,4 @@
-# LDA RoboCasa private platform canary
+# LDA RoboCasa public platform canary
 
 ## Local validation and current handoff
 
@@ -10,7 +10,7 @@ uv run --offline --no-project --with pytest==8.4.2 --with pyyaml==6.0.3 --with t
 
 For a dependency-free workspace check, run
 `python3 .treqs/scripts/check_local_candidate.py`. This checks stage shell syntax,
-the complete checkpoint-directory private upload, supervisor repository replacement, and actual receipt
+the complete checkpoint-directory public upload, supervisor repository replacement, and actual receipt
 generation using synthetic files, including markers, metric, and package hashes.
 The package emits E2E_ARTIFACT and E2E_RESULT and preserves loader metadata and
 component notices as physical files under checkpoints/loader, inventoried in the artifact manifest. These local checks
@@ -20,14 +20,13 @@ exact agreement between the published result and the logged receipt when TReqs
 redacts machine-local workspace prefixes.
 See `iteration-1-notes.md` for checks run and current limitations.
 
-This private platform canary fine-tunes the pinned `Wayer2/LDA-robocasa` checkpoint for exactly
+This public platform canary fine-tunes the pinned `Wayer2/LDA-robocasa` checkpoint for exactly
 one optimizer step on LDA's four-episode committed demo dataset. The purpose is
 to verify TReqs orchestration, ROAR capture, GLaaS lineage, checkpoint
-verification, and private Hugging Face publication. It is not a campaign
+verification, and public Hugging Face publication. It is not a campaign
 certification or model-quality claim. Campaign issue #5 was closed as not
 planned because its non-commercial license fails the campaign gate. This branch
-preserves private platform-canary code; it does not authorize compute or
-publication.
+preserves the bounded recipe; the external launch plan records the separate public-run authorization.
 
 ## Immutable inputs
 
@@ -104,25 +103,22 @@ ROAR's metadata and storage commands directly against those captured artifacts:
    includes licenses, model cards, manifests, and evaluation evidence;
 5. `label` attaches model, version, license, description, and documentation
    metadata to the released checkpoint;
-6. `publish` receives GLaaS credentials and publishes privately through `roar put`
-   as the complete checkpoints directory, containing checkpoint, receipts, and loader resources. The supervisor replaces the placeholder
-   repository in the workflow; preflight derives its repository from that destination.
+6. `publish` receives GLaaS credentials and publishes publicly through `roar put`
+   as the complete checkpoints directory, containing checkpoint, receipts, and loader resources. The destination is `reproducible-ai/lda-1b-robocasa`; preflight verifies that it is public and writable.
    `checkpoints/result.json` records `optimizerSteps`, and
    `checkpoints/artifact-manifest.json` hashes all other published files using checkpoint-directory-relative paths, including
    loader metadata and component notices. Independent audit remains the supervisor's task.
 
-For issue 38, the supervisor must enforce a $5 attempt cap including setup,
-retries, and shutdown before scheduling the single Blackwell GPU. Prior finalized
-cost is $5, leaving $10 of the original $15 approval; this attempt may use at most $5.
-Require fresh full published lineage including train and evaluate, independent
-checkpoint readback, exact result-sidecar equality, and independent auditor PASS.
-Retain issue 36 and blocked issue 37 artifacts and evidence. Intervention after
-launch disqualifies an unattended-success claim. Local notes stay in this workspace.
-The supervisor owns dollar-budget enforcement;
-per-command timeouts alone do not establish a dollar cap.
-The publication command uses one literal checkpoint-directory source and starts directly
-with `roar put` so the supervisor can bind it. The supervisor must also bound the
-publication stage duration; this command has no shell timeout wrapper.
+The public run has a $5 compute cap, an early stop at a conservative $3.50,
+and a 45-minute queued-job deadline. Allocation cost includes startup and idle
+shutdown. The target has automatic idle shutdown within 15 minutes. This is a
+supervised stop policy, not a provider-enforced dollar limit; host/API availability
+is required. A failed paid run does not launch a replacement.
+
+The source, dependencies, demo adapter, optimizer schedule and pinned Roar source
+remain those of the successful private issue #38 candidate. Earlier private
+artifacts and audit results are retained as historical evidence. This public
+canary does not claim a new independent-auditor verdict or cold certification.
 
 The final DAG should be inspectable with:
 
@@ -145,7 +141,7 @@ configuration, statistics, and upstream metadata as ordinary files. Every publis
 file except the two receipts has a SHA-256 and `sizeBytes` inventory entry.
 To restore LDA's layout, copy `checkpoints/loader/` contents into a new release
 root and place the published state dictionary under that root's `checkpoints/`.
-Retain the original private package for independent verification. Paths in the
+Retain the original package evidence for independent verification. Paths in the
 manifest are relative to the published checkpoint directory, without traversal.
 
 Runtime pins are PyTorch 2.9.0+cu128, torchvision 0.24.0+cu128, and torchcodec
@@ -179,3 +175,43 @@ Franka slot 4. It samples video/state history at [-5, 0] and future video at 16
 through the existing dataset loader. Checkpoint shapes and strict loading are
 unchanged. This establishes a training compatibility canary only; it does not
 establish matching embodiment semantics, policy quality, or full reproduction.
+
+## Fully automated public run
+
+`.treqs/scripts/public_lda_canary.py` adapts the tested public supervisor from
+`reproducible-ai/Isaac-GR00T@c084d6eab090a2b5822db474d790a00dfe7fae5d`.
+It verifies that source revision before importing it. The plan also pins this
+LDA source, harness verification helpers, target/AMI, public HF repository, and
+an isolated bound TReqs control checkout. It records the public-run authorization
+and a frozen template of the prior local LDA notes.
+
+Run the frozen host environment under launchd and `caffeinate -i`:
+
+```bash
+/path/to/host/python .treqs/scripts/public_lda_canary.py --plan /absolute/run/plan.json
+```
+
+The supervisor creates one request with `--lineage-mode public`, queues once,
+monitors full allocation cost and shutdown, verifies all seven tasks, streams
+all published files anonymously at an immutable HF revision, and matches their
+sizes and SHA-256 hashes to the manifest and logged result. It separately checks
+that the actual training output feeds PUT in the public GLaaS graph, including
+the byte-identical copy made by packaging. It then generates and pushes the
+notes record, creates a draft PR, and updates the HF model card with the links.
+
+The 14.4 GB checkpoint is streamed without retaining another local copy. The
+worker performs the full state-dict load, finite-floating-tensor checks and
+changed-parameter test; the host verifies that the public bytes match that
+checkpoint's digest. The host does not claim a second full model load.
+
+`state.json`, `events.jsonl`, `download-progress.json`, `verification.json` and
+publication receipts live beside the immutable plan. `complete` requires final
+compute settlement, public verification, and a pushed/read-back notes PR.
+Restarting resumes the same request/job; lost create/queue replies are reconciled
+without another paid launch. Post-run publication errors retry without GPU work.
+Do not edit the plan or remove state to retry training. Operational TReqs commands
+belong in the separate control checkout.
+
+Host automation tests live in `tests/automation`; they are separate from the
+worker's `tests/treqs` recipe checks. Set `PUBLIC_CANARY_SUPERVISOR_SCRIPTS` to the
+pinned supervisor's `.treqs/scripts` directory when running them.

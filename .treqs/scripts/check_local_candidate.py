@@ -47,9 +47,9 @@ assert args[-1].startswith('hf://')
 assert args[-1].endswith('/artifacts/lda-robocasa-canary/release/checkpoints')
 assert args[:2] == ["roar", "put"]
 assert args[2] == "artifacts/lda-robocasa-canary/release/checkpoints"
-assert args[3:-1] == ["--private", "--yes", "--no-tag", "-m", "private reproducibility canary"]
-assert all(flag in args for flag in ('--private', '--yes', '--no-tag'))
-assert not any(flag in args for flag in ('--public', '--anonymous'))
+assert args[3:-1] == ["--public", "--yes", "--no-tag", "-m", "public non-commercial reproducibility canary"]
+assert all(flag in args for flag in ('--public', '--yes', '--no-tag'))
+assert not any(flag in args for flag in ('--private', '--anonymous'))
 assert args.count('-m') == 1 and args[args.index('-m') + 1].strip()
 for name in ('artifact-manifest.json', 'result.json'):
     assert name in command
@@ -68,7 +68,7 @@ class Workflow:
 namespace = {'ROOT': Workflow()}
 exec(compile(ast.Module(body=[function], type_ignores=[]), str(contract_path), 'exec'), namespace)
 assert namespace['publication_repo_id']() == 'reproducible-ai/replaced-attempt'
-print('PASS: HF_TOKEN declaration, seven stage shell syntax checks, private upload contract, Python syntax, repository replacement')
+print('PASS: HF_TOKEN declaration, seven stage shell syntax checks, public upload contract, Python syntax, repository replacement')
 
 # Exercise the real receipt writer without importing GPU or YAML dependencies.
 import contextlib

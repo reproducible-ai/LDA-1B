@@ -127,7 +127,7 @@ def write_receipts(release_root: Path, checkpoint: Path, evaluation: dict) -> No
               "checkpoint": artifact["path"], "artifactSha256": digest,
               "artifactSizeBytes": artifact["sizeBytes"], "loadVerified": True,
               "evaluation": evaluation,
-              "claim": "Private non-commercial training-path canary only; no model-quality claim."}
+              "claim": "Public non-commercial training-path canary only; no model-quality claim."}
     manifest = dict(artifact, schema="reproai.artifact-manifest/v1")
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")

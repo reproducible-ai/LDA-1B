@@ -25,7 +25,7 @@ def publication_repo_id():
     workflow = (ROOT / ".treqs/workflows/robocasa-demo-canary.yaml").read_text()
     destinations = re.findall(r"hf://([^/\s]+/[^/\s]+)", workflow)
     if len(destinations) != 1:
-        raise RuntimeError("Expected one private publication destination")
+        raise RuntimeError("Expected one publication destination")
     return destinations[0]
 
 

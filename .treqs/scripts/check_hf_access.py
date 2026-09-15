@@ -48,7 +48,7 @@ def has_org_write_access(identity: dict, org_name: str) -> bool:
     return False
 
 
-def check_private_writable_repo(repo_id: str, token: str) -> None:
+def check_public_writable_repo(repo_id: str, token: str) -> None:
     repo_path = quote(repo_id, safe="/")
     try:
         repo_info = request_json(f"https://huggingface.co/api/models/{repo_path}", token)
@@ -59,8 +59,8 @@ def check_private_writable_repo(repo_id: str, token: str) -> None:
                 "roar put only writes to pre-existing repositories"
             ) from exc
         raise
-    if repo_info.get("private") is not True:
-        raise RuntimeError(f"Hugging Face publication repo {repo_id} must be private")
+    if repo_info.get("private") is not False:
+        raise RuntimeError(f"Hugging Face publication repo {repo_id} must be public")
 
     sample = b"permission-check"
     payload = json.dumps(
@@ -113,12 +113,12 @@ def main() -> None:
     namespace = PUBLICATION_REPO_ID.split("/", 1)[0]
     if not has_org_write_access(identity, namespace):
         raise RuntimeError(f"HF_TOKEN lacks write access to the {namespace} organization")
-    check_private_writable_repo(PUBLICATION_REPO_ID, token)
+    check_public_writable_repo(PUBLICATION_REPO_ID, token)
 
     print(
         "Hugging Face preflight passed for the pinned LDA and Qwen inputs, "
         "the pinned DINOv3 license, "
-        f"and private writable repo {PUBLICATION_REPO_ID}"
+        f"and public writable repo {PUBLICATION_REPO_ID}"
     )
 
 

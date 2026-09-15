@@ -83,6 +83,8 @@ def test_workflow_is_one_clean_lineage_dag():
     upload = [line for line in publish.splitlines() if "roar put" in line]
     assert len(upload) == 1
     args = shlex.split(upload[0])
+    assert args[:2] == ["env", "HF_HUB_DISABLE_XET=1"]
+    args = args[2:]
     assert args[-1].startswith("hf://")
     assert args[-1].endswith("/artifacts/lda-robocasa-canary/release/checkpoints")
     assert args.count("-m") == 1 and args[args.index("-m") + 1].strip()
@@ -134,7 +136,7 @@ def test_workflow_hard_bounds_external_operations():
     assert f"{hard_timeout} 180 roar label set" in workflow["label"]["command"]
     publish_lines = workflow["publish"]["command"].splitlines()
     assert any(f"{hard_timeout} 180 roar status --untracked-dirs" in line for line in publish_lines)
-    assert sum(line.startswith("roar put artifacts/lda-robocasa-canary/release/checkpoints ") for line in publish_lines) == 1
+    assert sum(line.startswith("env HF_HUB_DISABLE_XET=1 roar put artifacts/lda-robocasa-canary/release/checkpoints ") for line in publish_lines) == 1
 
 
 def test_workflow_stage_commands_are_valid_bash():

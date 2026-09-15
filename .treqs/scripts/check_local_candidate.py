@@ -43,6 +43,8 @@ assert 'glaas_creds: true' in body and 'trace: "off"' in body
 uploads = [line for line in command.splitlines() if 'roar put' in line]
 assert len(uploads) == 1
 args = shlex.split(uploads[0])
+assert args[:2] == ["env", "HF_HUB_DISABLE_XET=1"]
+args = args[2:]
 assert args[-1].startswith('hf://')
 assert args[-1].endswith('/artifacts/lda-robocasa-canary/release/checkpoints')
 assert args[:2] == ["roar", "put"]

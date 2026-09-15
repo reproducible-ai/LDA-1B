@@ -13,6 +13,14 @@ import time
 SUPERVISOR_COMMIT = "c084d6eab090a2b5822db474d790a00dfe7fae5d"
 
 
+def validate_retry_budget(plan, idle_minutes):
+    reserve = plan["shutdownReserveUsd"]
+    minimum = plan["conservativeHourlyUsd"] * (idle_minutes + 5) / 60
+    if (reserve < minimum or plan["stopAtUsd"] + reserve > plan["budgetUsd"]
+            or plan["maxJobSeconds"] / 3600 * plan["conservativeHourlyUsd"] + reserve > plan["budgetUsd"]):
+        raise RuntimeError("Retry budget must reserve idle shutdown and provider confirmation time")
+
+
 def load_runtime(plan):
     source = Path(plan["supervisorWorkspace"])
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=source, text=True).strip()
@@ -36,6 +44,19 @@ def build_actions(runtime, plan, root):
                     or target["resources"]["instanceType"] != "g7e.2xlarge"
                     or target["resources"]["amiId"] != plan["amiId"]):
                 raise RuntimeError("Target does not match the authorized recipe and shutdown policy")
+            if plan.get("priorPublicAttempt"):
+                prior = plan["priorPublicAttempt"]
+                old_job = self.job(prior["jobId"])
+                if old_job["status"] != "FAILED" or old_job["onDemandInstanceId"] != prior["instanceId"]:
+                    raise RuntimeError("Prior public job does not match the failed-attempt receipt")
+                rows = self.cli("compute", "targets", "instances", prior["targetId"], "--owner", "reproducible-ai")
+                rows = rows if isinstance(rows, list) else rows["instances"]
+                old_instance = next(x for x in rows if x["id"] == prior["instanceId"])
+                if (old_instance["status"].lower() not in runtime.INSTANCE_TERMINAL
+                        or old_instance.get("totalCostCents") != round(prior["costUsd"] * 100)
+                        or prior["costUsd"] + plan["budgetUsd"] > 5):
+                    raise RuntimeError("Retry requires settled prior cost and the original total budget")
+                validate_retry_budget(plan, target["idleTimeoutMinutes"])
             for directory, expected in ((plan["sourceWorkspace"], plan["sourceCommit"]),
                                         (plan["controlWorkspace"], plan["sourceCommit"]),
                                         (plan["harnessWorkspace"], plan["harnessCommit"])):

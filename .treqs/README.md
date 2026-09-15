@@ -215,3 +215,23 @@ belong in the separate control checkout.
 Host automation tests live in `tests/automation`; they are separate from the
 worker's `tests/treqs` recipe checks. Set `PUBLIC_CANARY_SUPERVISOR_SCRIPTS` to the
 pinned supervisor's `.treqs/scripts` directory when running them.
+
+### HTTP upload retry
+
+The first public job completed training and checkpoint validation, then its Xet
+upload failed with `Internal error: timed out reading request body` after showing
+100% transfer. Publication now sets `HF_HUB_DISABLE_XET=1` only for `roar put`;
+input downloads and all model/runtime pins retain their existing behavior.
+The transport regression check executes Hugging Face Hub 0.36.0's upload
+negotiation. Set `PUBLIC_CANARY_UPLOAD_PYTHON` to that isolated interpreter when
+running host tests.
+
+A retry plan includes `priorPublicAttempt` with the failed job/target/instance,
+settled cost and exact partial-repository revision. Preflight requires the prior
+instance to be stopped, permits only its manifest/result metadata to be replaced,
+and rejects existing checkpoint artifacts or a moved revision. The retry reserves
+the target's full idle timeout plus five minutes for provider confirmation, and
+checks both its elapsed-time and early-stop thresholds against that reserve.
+Prior cost plus the new budget must stay within the original $5 compute cap. Generated notes preserve both
+public attempts and their combined spend. A retry uses a new frozen plan and
+request title; it never edits the prior supervisor's state.

@@ -6,6 +6,7 @@ import os
 import re
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 from types import SimpleNamespace
 
@@ -21,6 +22,62 @@ sys.path.append(PINNED)
 import lda_public_verification as verify
 import public_lda_canary as adapter
 import public_canary_supervisor as runtime
+
+
+def test_publication_uses_http_transport_without_changing_input_downloads():
+    workflow = yaml.safe_load((ROOT / ".treqs/workflows/robocasa-demo-canary.yaml").read_text())
+    tasks = workflow
+    assert "env HF_HUB_DISABLE_XET=1 roar put " in tasks["publish"]["command"]
+    assert "HF_HUB_DISABLE_XET" not in tasks["fetch"]["command"]
+
+
+def test_pinned_hub_negotiates_only_http_when_xet_is_disabled(tmp_path):
+    python = os.environ.get("PUBLIC_CANARY_UPLOAD_PYTHON")
+    if not python:
+        pytest.skip("Set PUBLIC_CANARY_UPLOAD_PYTHON to the pinned HF 0.36 environment")
+    checkpoint = tmp_path / "checkpoint.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    script = '''
+import sys
+import huggingface_hub as hub
+import huggingface_hub._commit_api as api
+assert hub.__version__ == "0.36.0"
+assert not api.is_xet_available()
+observed=[]
+def batch(**kwargs):
+    observed.append(kwargs["transfers"])
+    assert kwargs["transfers"] == ["basic", "multipart"]
+    return [], [], "basic"
+api.post_lfs_batch_info=batch
+api._upload_files(additions=[hub.CommitOperationAdd(path_in_repo="checkpoint.pt", path_or_fileobj=sys.argv[1])],
+                  repo_type="model", repo_id="owner/model", headers={})
+assert observed
+'''
+    result = subprocess.run([python, "-c", script, str(checkpoint)],
+        env={**os.environ, "HF_HUB_DISABLE_XET": "1"}, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_retry_only_accepts_the_pinned_partial_publication():
+    files = {"README.md", f"{verify.PREFIX}/result.json", f"{verify.PREFIX}/artifact-manifest.json"}
+    plan = {"priorPublicAttempt": {"repositoryRevision": "a" * 40}}
+    verify.check_publication_inventory(plan, "a" * 40, files)
+    with pytest.raises(ValueError, match="changed"):
+        verify.check_publication_inventory(plan, "b" * 40, files)
+    with pytest.raises(ValueError, match="checkpoint artifacts"):
+        verify.check_publication_inventory(plan, "a" * 40, files | {f"{verify.PREFIX}/{verify.CHECKPOINT}"})
+    with pytest.raises(ValueError, match="checkpoint artifacts"):
+        verify.check_publication_inventory({}, "a" * 40, files)
+
+
+def test_retry_budget_reserves_idle_shutdown_and_confirmation():
+    plan = {"shutdownReserveUsd": 1.2, "conservativeHourlyUsd": 3.5, "stopAtUsd": 1.5,
+            "budgetUsd": 2.7, "maxJobSeconds": 1500}
+    adapter.validate_retry_budget(plan, 15)
+    with pytest.raises(RuntimeError, match="reserve"):
+        adapter.validate_retry_budget({**plan, "shutdownReserveUsd": 0.5}, 15)
+    with pytest.raises(RuntimeError, match="reserve"):
+        adapter.validate_retry_budget({**plan, "maxJobSeconds": 1800}, 15)
 
 
 def test_huggingface_custom_license_name_is_a_valid_metadata_slug():
@@ -139,7 +196,8 @@ def test_lda_adapter_uses_real_cli_with_public_mode_and_correct_workflow(tmp_pat
     assert adapter.build_actions(runtime, plan, tmp_path).create() == {"id": "request"}
 
 
-def test_notes_rendering_is_idempotent_and_keeps_historical_evidence(tmp_path):
+@pytest.mark.parametrize("retry", [False, True])
+def test_notes_rendering_is_idempotent_and_keeps_historical_evidence(tmp_path, retry):
     source, output = tmp_path / "template", tmp_path / "notes"
     source.mkdir()
     (source / "README.md").write_text("# LDA-1B\n\nPrivate capture history.\n")
@@ -148,6 +206,8 @@ def test_notes_rendering_is_idempotent_and_keeps_historical_evidence(tmp_path):
     (source / "costs.md").write_text("# Private campaign costs\n\n$6.24\n")
     plan = {"notesTemplate": str(source), "notesTemplateSha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in source.iterdir()},
             "sourceCommit": "c" * 40, "supervisorCommit": "d" * 40, "runId": "test", "runDate": "2026-09-15"}
+    if retry:
+        plan["priorPublicAttempt"] = {"jobId": "failed-job", "costUsd": 2.0}
     state = {"verification": {"hfUrl": "https://hf.test/pinned", "glaasUrl": "https://glaas.test/dag", "lineage": {"dagHash": "a" * 64},
                              "result": {"artifactSizeBytes": 11, "artifactSha256": "new"}},
              "jobId": "job", "requestId": "request", "observedCostUsd": 1.5, "allocationActive": False}
@@ -159,9 +219,12 @@ def test_notes_rendering_is_idempotent_and_keeps_historical_evidence(tmp_path):
     assert json.loads((output / "row.json").read_text())["verified"] is False
     row = json.loads((output / "row.json").read_text())
     assert row["artifacts"][0]["sha256"] == "new"
-    assert len(row["runs"]) == 1
+    assert len(row["runs"]) == (2 if retry else 1)
     assert "Artifacts remain private" not in row["dataWarnings"]
     assert "$6.24" in (output / "costs.md").read_text()
+    if retry:
+        assert "$3.50" in (output / "PUBLIC-RELEASE.md").read_text()
+        assert row["runs"][0]["outcome"] == "failed"
 
 
 def test_notes_schema_accepts_historical_inventory_and_rejects_bad_digest():

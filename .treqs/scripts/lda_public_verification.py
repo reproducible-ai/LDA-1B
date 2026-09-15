@@ -24,6 +24,15 @@ TRAINED_PATH = "artifacts/lda-robocasa-canary/training/robocasa-demo-canary/chec
 MODEL_DIRECTORY = "028-robotics-lda-1b"
 
 
+def check_publication_inventory(plan, revision, files):
+    allowed = {".gitattributes", "README.md"}
+    prior = plan.get("priorPublicAttempt")
+    if prior:
+        require(revision == prior["repositoryRevision"], "Failed publication changed before retry")
+        allowed |= {f"{PREFIX}/artifact-manifest.json", f"{PREFIX}/result.json"}
+    require(files <= allowed, "Publication repository already contains checkpoint artifacts")
+
+
 def prepare_repository(plan, root):
     from check_hf_access import check_file, check_public_writable_repo, has_org_write_access, request_json
     from lda_canary_contract import BASE_MODEL_ID, BASE_MODEL_REVISION, QWEN_MODEL_ID, QWEN_MODEL_REVISION, DINO_MODEL_ID, DINO_MODEL_REVISION, DINO_LICENSE_NAME
@@ -45,7 +54,7 @@ def prepare_repository(plan, root):
         info = api.model_info(repo)
     require(info.private is False, "Refusing to change an existing private repository")
     files = {f.rfilename for f in info.siblings}
-    require(files <= {".gitattributes", "README.md"}, "Publication repository already contains artifacts")
+    check_publication_inventory(plan, info.sha, files)
     marker = f"<!-- public-canary:{plan['runId']} -->"
     if "README.md" in files:
         path = hf_hub_download(repo, "README.md", revision=info.sha, token=token, local_dir=str(root / "preflight"))
@@ -177,6 +186,9 @@ def render_notes(plan, state, directory):
     record = {**receipt, "runId": plan["runId"], "jobId": state["jobId"], "requestId": state["requestId"],
               "costUsd": state["observedCostUsd"], "computeStopped": not state["allocationActive"],
               "supervisorCommit": plan["supervisorCommit"]}
+    if plan.get("priorPublicAttempt"):
+        record["priorPublicAttempt"] = plan["priorPublicAttempt"]
+        record["totalPublicComputeCostUsd"] = round(state["observedCostUsd"] + plan["priorPublicAttempt"]["costUsd"], 2)
     atomic_json(directory / "evidence/public-release.json", record)
     (directory / "PUBLIC-RELEASE.md").write_text(
         "# Public LDA-1B RoboCasa canary\n\nA fresh one-step public run used the same pinned recipe, "
@@ -219,6 +231,12 @@ def render_notes(plan, state, directory):
         "No independent auditor verdict, cold replay, held-out policy evaluation or full-run cost estimate is claimed for the public run.",
         "Roar reported untracked artifact directories. The demo adapter does not establish RoboCasa semantic equivalence.",
     ]
+    prior = plan.get("priorPublicAttempt")
+    if prior:
+        row.setdefault("runs", []).append({"label": "Public upload attempt 1", "attemptId": prior["jobId"],
+            "purpose": "public training capture", "outcome": "failed", "costUsd": prior["costUsd"],
+            "costSource": "Finalized TReqs on-demand instance receipt", "schedulerStatus": "FAILED",
+            "note": "Training and checkpoint evaluation passed; Xet upload failed with 'timed out reading request body'. No verified public checkpoint was produced by this attempt."})
     if receipt.get("result"):
         result = receipt["result"]
         row["artifacts"] = [{"path": CHECKPOINT, "bytes": result["artifactSizeBytes"],
@@ -235,6 +253,14 @@ def render_notes(plan, state, directory):
                          f"The new public run cost **${state['observedCostUsd']:.2f}**, including allocation shutdown. "
                          "The earlier ledger above describes the private campaign. `row.json.rebuild` now describes "
                          "this public run. See [PUBLIC-RELEASE.md](PUBLIC-RELEASE.md) for its evidence.\n")
+    if prior:
+        detail = (f"\n## Public upload retry\n\nThe first public job `{prior['jobId']}` passed training and evaluation, "
+                  f"then failed during Xet upload: `timed out reading request body`. Its finalized cost was **${prior['costUsd']:.2f}**. "
+                  "This fresh retry uses HTTP upload with the same model and training pins. "
+                  f"Total public-run compute cost: **${record['totalPublicComputeCostUsd']:.2f}** within the original $5 budget.\n")
+        for path in (directory / "PUBLIC-RELEASE.md", costs):
+            if path.exists():
+                path.write_text(path.read_text() + detail)
     atomic_json(row_path, row)
 
 

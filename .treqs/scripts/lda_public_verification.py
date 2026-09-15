@@ -224,8 +224,8 @@ def render_notes(plan, state, directory):
         row["artifacts"] = [{"path": CHECKPOINT, "bytes": result["artifactSizeBytes"],
                              "sha256": result["artifactSha256"],
                              "note": "Public one-step checkpoint; every byte independently streamed and SHA-256 checked. Worker load and tensor checks are bound to this digest."}]
-        row.setdefault("attempts", []).append({
-            "label": "Public one-step canary", "purpose": "public training capture",
+        row.setdefault("runs", []).append({
+            "label": "Public one-step canary", "attemptId": plan["runId"], "purpose": "public training capture",
             "params": "one optimizer step; 1 GPU; batch 4", "dataset": "Four source-pinned sim_pick_place demo episodes",
             "costUsd": state["observedCostUsd"], "costSource": "Finalized TReqs on-demand instance receipt",
             "schedulerStatus": "COMPLETED", "outcome": "ok", "note": f"Job {state['jobId']}; public byte and lineage verification passed; compute stopped."})
@@ -238,6 +238,20 @@ def render_notes(plan, state, directory):
     atomic_json(row_path, row)
 
 
+def validate_notes_row(row):
+    # The historical notes row also includes this optional artifact inventory,
+    # which is not part of the harness's more restrictive generated-row schema.
+    artifacts = row.get("artifacts", [])
+    require(isinstance(artifacts, list), "Artifact inventory must be a list")
+    for artifact in artifacts:
+        require(set(artifact) == {"path", "bytes", "sha256", "note"}
+                and artifact["path"] == CHECKPOINT
+                and isinstance(artifact["bytes"], int) and artifact["bytes"] > 0
+                and bool(re.fullmatch(r"[0-9a-f]{64}", artifact["sha256"]))
+                and isinstance(artifact["note"], str), "Invalid notes checkpoint inventory")
+    _ROW_VALIDATOR.validate({key: value for key, value in row.items() if key != "artifacts"})
+
+
 def publish_notes(plan, root, state, actions):
     receipt = state["verification"]
     require(receipt["verified"] and not state["allocationActive"], "Public verification and shutdown are required")
@@ -248,7 +262,7 @@ def publish_notes(plan, root, state, actions):
     require(upstream == f"origin/{branch}", "Notes branch tracking changed")
     actions.command(["git", "merge", "--ff-only", upstream], cwd=checkout)
     render_notes(plan, state, checkout / MODEL_DIRECTORY)
-    _ROW_VALIDATOR.validate(json.loads((checkout / MODEL_DIRECTORY / "row.json").read_text()))
+    validate_notes_row(json.loads((checkout / MODEL_DIRECTORY / "row.json").read_text()))
     actions.command(["git", "add", MODEL_DIRECTORY], cwd=checkout)
     if actions.command(["git", "diff", "--cached", "--name-only"], cwd=checkout).strip():
         actions.command(["git", "commit", "-m", "docs(lda): record verified public canary and lineage"], cwd=checkout)

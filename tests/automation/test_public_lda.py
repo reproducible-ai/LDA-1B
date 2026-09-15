@@ -151,6 +151,20 @@ def test_notes_rendering_is_idempotent_and_keeps_historical_evidence(tmp_path):
     assert json.loads((output / "row.json").read_text())["verified"] is False
     row = json.loads((output / "row.json").read_text())
     assert row["artifacts"][0]["sha256"] == "new"
-    assert len(row["attempts"]) == 1
+    assert len(row["runs"]) == 1
     assert "Artifacts remain private" not in row["dataWarnings"]
     assert "$6.24" in (output / "costs.md").read_text()
+
+
+def test_notes_schema_accepts_historical_inventory_and_rejects_bad_digest():
+    row = {"name": "LDA-1B", "slug": "lda-1b", "org": "reproducible-ai", "type": "robotics",
+           "date": "2026-09-15", "status": "progress", "summary": "One-step canary", "trainingMode": "partial",
+           "verified": False, "rebuild": {"time": "1000s", "hw": "GPU", "costUsd": 1.5},
+           "runs": [{"label": "Public canary", "attemptId": "public-test", "outcome": "ok", "costUsd": 1.5}],
+           "truncationNote": "One of 300000 optimizer steps",
+           "truncation": {"ran": 1, "full": 300000, "unit": "optimizer steps", "note": "Bounded canary"},
+           "truncated": True, "artifacts": [{"path": verify.CHECKPOINT, "bytes": 11, "sha256": "a" * 64, "note": "Public"}]}
+    verify.validate_notes_row(row)
+    row["artifacts"][0]["sha256"] = "bad"
+    with pytest.raises(ValueError, match="inventory"):
+        verify.validate_notes_row(row)

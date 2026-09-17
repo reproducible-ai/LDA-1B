@@ -12,7 +12,7 @@ timeout --signal=TERM --kill-after=30 180 uv pip install --python .venv/bin/pyth
 timeout --signal=TERM --kill-after=30 180 uv pip install --python .venv/bin/python --no-deps -e .
 export PATH="$PWD/.venv/bin:$PATH"
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" HF_HOME=/tmp/lda-calibration-hf HF_HUB_DISABLE_XET=1 PYTHONUNBUFFERED=1
-timeout --signal=TERM --kill-after=30 180 python -m pytest -q tests/treqs/test_calibration_timing.py tests/treqs/test_calibration_process.py tests/treqs/test_calibration_package.py
+timeout --signal=TERM --kill-after=30 180 python -m pytest -q tests/treqs/test_calibration_timing.py tests/treqs/test_calibration_process.py tests/treqs/test_calibration_package.py tests/treqs/test_vlm_factory.py
 timeout --signal=TERM --kill-after=30 3600 python .treqs/scripts/prepare_robocasa_calibration.py
 timeout --signal=TERM --kill-after=30 7200 python -m scripts.calibration_robocasa run --plan .treqs/calibration/plan.json --config .treqs/calibration/resolved-config.json --output artifacts/robocasa-calibration/points
 timeout --signal=TERM --kill-after=30 900 python .treqs/scripts/report_robocasa_calibration.py

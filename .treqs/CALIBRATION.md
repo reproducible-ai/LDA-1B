@@ -1,8 +1,19 @@
 # LDA-1B RoboCasa calibration
 
-## Required host checks
+## Restricted operator checks
 
-Run `bash .treqs/scripts/check_calibration_local.sh` from the candidate checkout before requesting compute. This uses a pinned, cache-managed CPU Python environment; system Python does not need ML dependencies. It leaves candidate source/configuration untouched and avoids installing the full CUDA/DeepSpeed requirements on the host. The worker uses its separately pinned GPU setup. A missing system `pytest` is resolved by this bootstrap command.
+The harness operator has no network access. Run these commands from the frozen candidate checkout; both use only the Python standard library:
+
+```bash
+python3 -S -c 'from scripts.calibration_robocasa import load_inputs; load_inputs(".treqs/calibration/plan.json", ".treqs/calibration/resolved-config.json"); print("PASS: actual runtime recipe and pinned input/launcher checks")'
+python3 -S -m unittest tests.treqs.test_calibration_process
+```
+
+Also inspect the prepared workflow and compare the plan SHA with the task packet. These are local contract/process checks, not the complete CPU suite or proof of GPU fit. After they pass, return the frozen candidate with a `treqs-run` request for the supervisor. The operator must not fetch packages or replace these commands with an unavailable system pytest.
+
+## Supervisor and CI host checks
+
+Before authorizing a source pin, the supervising maintainer runs `bash .treqs/scripts/check_calibration_local.sh`. This uses a pinned, cache-managed CPU environment and runs the complete `tests/treqs` suite. It requires package access on first use and belongs outside the restricted operator. The complete suite passed for the reviewed implementation. Worker setup independently runs all calibration pytest modules in the GPU environment before input preparation or training. The supervisor still validates the actual private workflow binding and the clean pinned source before allocating compute.
 
 This optional workflow measures three **independent 100/200/400-update points**.
 The ordinary trainer retains the **300,000-update cosine scheduler and 15,000 warmup updates**.

@@ -148,6 +148,28 @@ def test_configuration_and_launcher_tampering_are_rejected(prepared):
         load_inputs(plan, config)
 
 
+def test_cost_report_retains_measurements_without_copying_weights(prepared, capsys, monkeypatch):
+    import sys
+
+    monkeypatch.syspath_prepend(str(SOURCE / ".treqs/scripts"))
+    import report_robocasa_calibration as report
+
+    monkeypatch.setattr(report.subprocess, "check_output", lambda *a, **k: "f" * 40)
+    report.main()
+    output = capsys.readouterr().out
+    lines = [line for line in output.splitlines() if line.startswith("COST_REPORT=")]
+    assert len(lines) == 1
+    result = json.loads(lines[0].split("=", 1)[1])
+    assert [p["completedSteps"] for p in result["points"]] == [100, 200, 400]
+    assert result["checkpointValidation"]["status"] == "passed"
+    assert len(result["trainerEvents"]) == 3
+    assert result["checkpointBytes"] == prepared[0].stat().st_size
+    assert not package.RELEASE.exists()
+    assert "E2E_ARTIFACT=" not in output
+    assert (report.ROOT / "cost-report.json").stat().st_size < 1024 * 1024
+    sys.modules.pop("report_robocasa_calibration", None)
+
+
 def test_points_must_be_complete_and_ordered(prepared):
     plan = json.loads(Path(".treqs/calibration/plan.json").read_text())
     events = [json.loads(line) for line in (package.POINTS / "processes.jsonl").read_text().splitlines()]

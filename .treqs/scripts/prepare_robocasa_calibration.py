@@ -13,6 +13,38 @@ ROOT = Path("artifacts/robocasa-calibration")
 INPUTS = ROOT / "inputs"
 
 
+def download_dataset(spec, destination, token):
+    """List pinned task subtrees directly, avoiding a scan of unrelated data."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from huggingface_hub import HfApi, hf_hub_download
+    from huggingface_hub.hf_api import RepoFile
+
+    destination = Path(destination)
+    api = HfApi(token=token)
+    common = {
+        "repo_id": spec["datasetRepository"], "revision": spec["datasetRevision"],
+        "repo_type": "dataset",
+    }
+
+    def download(filename):
+        return hf_hub_download(**common, filename=filename, local_dir=destination, token=token)
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        for index, folder in enumerate(spec["datasetFolders"], 1):
+            print(f"Listing pinned dataset task {index}/{len(spec['datasetFolders'])}: {folder}", flush=True)
+            files = [
+                entry.path for entry in api.list_repo_tree(**common, path_in_repo=folder, recursive=True)
+                if isinstance(entry, RepoFile)
+            ]
+            if not files or any(not filename.startswith(folder + "/") for filename in files):
+                raise ValueError("missing or unexpected dataset task files: " + folder)
+            for _ in pool.map(download, files):
+                pass
+            print(f"Downloaded task {index}/{len(spec['datasetFolders'])}: {len(files)} files", flush=True)
+    return destination
+
+
 def storage_inventory(block_root=Path("/sys/block")):
     volumes = []
     for device in sorted(block_root.glob("nvme*n1")):
@@ -103,13 +135,7 @@ def main():
         raise ValueError("DINO license pin changed")
     (dino / "config.json").write_bytes(encoded(spec["DINO_CONFIG"]))
     (dino / "preprocessor_config.json").write_bytes(encoded(spec["DINO_PREPROCESSOR_CONFIG"]))
-    dataset = download(
-        spec["datasetRepository"],
-        spec["datasetRevision"],
-        INPUTS / "dataset",
-        repo_type="dataset",
-        allow_patterns=[folder + "/*" for folder in spec["datasetFolders"]],
-    )
+    dataset = download_dataset(spec, INPUTS / "dataset", token)
     validate_dataset(dataset, spec["datasetFolders"], spec["episodesPerFolder"])
     files = []
     for label, directory in [("base", base), ("backbone", qwen), ("vision", dino), ("dataset", dataset)]:

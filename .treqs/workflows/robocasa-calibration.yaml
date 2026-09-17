@@ -48,5 +48,5 @@ publish:
     set -euo pipefail
     export PATH="$PWD/.venv/bin:/usr/local/bin:/opt/pytorch/bin:$PATH"
     export HF_HUB_DISABLE_XET=1
-    roar put artifacts/robocasa-calibration/release hf://reproducible-ai/harness-test-lda-calibration/artifacts/robocasa-calibration/release --private --yes --no-tag -m "LDA-1B bounded RoboCasa calibration"
+    roar put artifacts/robocasa-calibration/release hf://reproducible-ai/stage-lda-1b-robocasa-b120065a0fd8/artifacts/robocasa-calibration/release --private --yes --no-tag -m "LDA-1B bounded RoboCasa calibration"
   trace: "off"

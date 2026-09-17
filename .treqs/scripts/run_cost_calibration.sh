@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The workflow bounds this whole sequence to 9900 seconds, including setup.
+# The workflow bounds this whole sequence to 7200 seconds, including setup.
 set -euo pipefail
 python3 -c 'import json,time; from pathlib import Path; p=Path("artifacts/robocasa-calibration"); p.mkdir(parents=True,exist_ok=True); (p/"setup-clock.json").write_text(json.dumps({"startedUnixSeconds":time.time()}))'
 export PATH="$(python3 -m site --user-base)/bin:${PATH}"

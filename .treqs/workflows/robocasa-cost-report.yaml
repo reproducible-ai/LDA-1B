@@ -1,0 +1,8 @@
+name: LDA-1B temporary-compute cost measurement
+secrets:
+  - HF_TOKEN
+measure:
+  command: |
+    set -euo pipefail
+    timeout --signal=TERM --kill-after=30 9900 bash .treqs/scripts/run_cost_calibration.sh
+  trace: "off"

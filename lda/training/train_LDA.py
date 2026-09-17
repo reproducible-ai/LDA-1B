@@ -41,6 +41,7 @@ from lda.model.framework import build_framework
 from lda.training.trainer_utils.trainer_tools import TrainerUtils
 from lda.training.trainer_utils.trainer_tools import build_param_lr_groups
 from lda.training.trainer_utils.config_tracker import wrap_config, AccessTrackedConfig
+from lda.training.calibration import timing_for_trainer
 
 deepspeed_plugin = DeepSpeedPlugin()
 accelerator = Accelerator(deepspeed_plugin=deepspeed_plugin)
@@ -361,6 +362,10 @@ class VLATrainer(TrainerUtils):
             range(self.config.trainer.max_train_steps), disable=not self.accelerator.is_local_main_process
         )
 
+        calibration = timing_for_trainer(self)
+        if calibration:
+            calibration.begin()
+
         # main training loop
         while self.completed_steps < self.config.trainer.max_train_steps:
             # get data batch
@@ -386,6 +391,15 @@ class VLATrainer(TrainerUtils):
                             "model_times": f"{t_end_model - t_start_model:.3f}",
                         }
                     )
+            if calibration and self.accelerator.sync_gradients:
+                if calibration.update(self.completed_steps, step_metrics):
+                    calibration.measure("checkpoint", self._save_checkpoint)
+                    if self.config.calibration.measure_evaluation:
+                        calibration.measure(
+                            "evaluation", lambda metrics=step_metrics: self.eval_action_model(dict(metrics))
+                        )
+                    calibration.finish()
+                    break
             # evaluate model
             if self.completed_steps % self.config.trainer.eval_interval == 0:
                 step_metrics = self.eval_action_model(step_metrics)
@@ -512,6 +526,9 @@ class VLATrainer(TrainerUtils):
 def main(cfg) -> None:
     logger.info("VLA Training :: Warming Up")
 
+    # Seed construction as well as data sampling for independent calibration resets.
+    if cfg.get("calibration"):
+        set_seed(cfg.seed)
     #  Wrap config to enable access tracking
     cfg = wrap_config(cfg)
     logger.info("✅ Configuration wrapped for access tracking")

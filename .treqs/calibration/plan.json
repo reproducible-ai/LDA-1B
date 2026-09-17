@@ -1,0 +1,91 @@
+{
+  "model": "LDA-1B RoboCasa",
+  "projection": {
+    "allocationOverhead": {
+      "clockToleranceSeconds": 2,
+      "method": "single-allocation/v1",
+      "source": "Forecast transfer allowance $0.15/GiB for one verified final release upload; not an invoice. Compute, <=1 TiB gp3, IPv4 covered by $24/allocation-hour. https://aws.amazon.com/ec2/pricing/on-demand/",
+      "trainTaskName": "train",
+      "transferUsdPerGiB": 0.15
+    },
+    "estimator": "ols/v1",
+    "exclusions": [],
+    "maxExtrapolationFactor": 1000,
+    "maxRelativeResidual": 0.1,
+    "maxSlopeSpread": 0.2,
+    "rate": {
+      "billingIncrementSeconds": 1,
+      "minimumBilledSeconds": 60,
+      "observedAt": "2026-09-17T01:38:26.841812Z",
+      "source": "Conservative allocation allowance: AWS Ohio Linux OnDemand p4d.24xlarge (all eight A100 GPUs) is $21.95764/hour, price list published 2026-09-10; remainder covers up to 1 TiB gp3 and one public IPv4. https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/us-east-2/index.json",
+      "unit": "allocation",
+      "usdPerHour": 24
+    }
+  },
+  "protocol": {
+    "cachePolicy": "Pre-read and hash pinned inputs before each independent eight-rank process; empty per-point compiler caches; reset strict-loaded weights, optimizer, full scheduler and RNG. SDPA attention in all points and the projected full recipe.",
+    "finalPointId": "p3",
+    "maxPointSeconds": 2700,
+    "minimumSteadyUpdates": 50,
+    "points": [
+      {
+        "id": "p1",
+        "steps": 100
+      },
+      {
+        "id": "p2",
+        "steps": 200
+      },
+      {
+        "id": "p3",
+        "steps": 400
+      }
+    ],
+    "seed": 42,
+    "timingPolicy": "synchronized-training-only"
+  },
+  "recipe": {
+    "baseModel": {
+      "repository": "https://huggingface.co/Wayer2/LDA-robocasa",
+      "revision": "811d14d8c22d3e98021c035948118143f53dd312"
+    },
+    "checkpoint": {
+      "atEnd": true,
+      "everySteps": 10000,
+      "scope": "Full model weights only, matching the upstream periodic checkpoint; additional upstream final-model save belongs to one-time finalization."
+    },
+    "configSha256": "6fbd3b43a8e2206b3d58ae03acf04e9f19699b975aa36d232fda9d2f450ed7e8",
+    "dataset": {
+      "repository": "https://huggingface.co/datasets/nvidia/PhysicalAI-Robotics-GR00T-X-Embodiment-Sim",
+      "revision": "ea7ac0b68f87da62f1e726771bba0fe74300802f",
+      "selection": "All 24 pinned upstream GR1 RoboCasa *_1000 task folders, 24,000 trajectories; continuation from released post-trained weights."
+    },
+    "evaluation": {
+      "atEnd": false,
+      "everySteps": 1000,
+      "scope": "One ordinary training-batch predict_action evaluation (20 DDIM steps), measured after first point; no held-out policy quality or simulator evaluation."
+    },
+    "fullSteps": 300000,
+    "gradientAccumulationSteps": 1,
+    "hardware": {
+      "accelerator": "NVIDIA A100-SXM4-40GB",
+      "gpuCount": 8,
+      "instanceType": "p4d.24xlarge"
+    },
+    "perDeviceBatchSize": 10,
+    "precision": "bf16",
+    "scheduler": {
+      "name": "cosine_with_min_lr",
+      "warmupSteps": 15000
+    },
+    "source": {
+      "repository": "https://github.com/reproducible-ai/LDA-1B",
+      "revision": "fd78edbc1942903fe8dd073a208996bed014849e"
+    },
+    "trainableModules": [
+      "qwen_vl_interface",
+      "action_model except vision_encoder"
+    ]
+  },
+  "schema": "reproai.calibration-plan/v1"
+}

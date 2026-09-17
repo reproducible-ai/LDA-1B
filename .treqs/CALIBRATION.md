@@ -9,6 +9,8 @@ python3 -S -c 'from scripts.calibration_robocasa import load_inputs; load_inputs
 python3 -S -m unittest tests.treqs.test_calibration_process
 ```
 
+Retain check output only under the ignored `artifacts/operator-checks/` directory (including any temporary files). Do not write untracked diagnostics beside reviewed source/configuration.
+
 Also inspect the prepared workflow and compare the plan SHA with the task packet. These are local contract/process checks, not the complete CPU suite or proof of GPU fit. After they pass, return the frozen candidate with a `treqs-run` request for the supervisor. The operator must not fetch packages or replace these commands with an unavailable system pytest.
 
 ## Supervisor and CI host checks

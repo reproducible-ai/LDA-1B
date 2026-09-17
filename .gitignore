@@ -244,3 +244,7 @@ examples/MultiRobot/*
 # Private platform-canary runtime state and outputs
 /.roar/
 /artifacts/lda-robocasa-canary/
+
+# Calibration outputs and retained restricted-operator check evidence
+/artifacts/robocasa-calibration/
+/artifacts/operator-checks/

@@ -1,0 +1,114 @@
+{
+  "calibration_runtime": {
+    "accelerateSha256": "8a6bb94718d7788edb0630c1166207aee26053f64d359e8e36a98bc01fdb44c0",
+    "deepspeedSha256": "15159083fb66e2d65441fc4d3fbf6983ea373534df8571512c344863de301094",
+    "exclude_first_updates": 20,
+    "inputSpecSha256": "df8529c39ed0d46e3ab81777e10cc1c9d778f1d93130f1252676b18ad7f19ac0",
+    "world_size": 8
+  },
+  "datasets": {
+    "vla_data": {
+      "CoT_prompt": "Your task is {instruction}. To identify the key objects for your task. Locate their bounding boxes in [x1,y1,x2,y2] format.",
+      "data_mix": "fourier_gr1_unified_1000_two_history",
+      "data_root_dir": "artifacts/robocasa-calibration/inputs/dataset",
+      "dataset_py": "lerobot_datasets",
+      "delete_pause_frame": false,
+      "image_size": [
+        224,
+        224
+      ],
+      "per_device_batch_size": 10,
+      "training_task_weights": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "use_delta_action": false
+    }
+  },
+  "framework": {
+    "action_model": {
+      "action_dim": 138,
+      "action_horizon": 16,
+      "action_model_type": "DiT-L",
+      "add_pos_embed": true,
+      "diffusion_model_cfg": {
+        "cross_attention_dim": 2560,
+        "dropout": 0.2,
+        "final_dropout": true,
+        "interleave_self_attention": true,
+        "norm_type": "ada_norm",
+        "num_layers": 16,
+        "output_dim": 2560,
+        "positional_embeddings": null
+      },
+      "future_action_window_size": 15,
+      "future_obs_index": 16,
+      "hidden_size": 2560,
+      "max_num_embodiments": 32,
+      "max_seq_len": 1024,
+      "noise_beta_alpha": 1.5,
+      "noise_beta_beta": 1.0,
+      "noise_s": 0.999,
+      "num_inference_timesteps": 4,
+      "num_target_vision_tokens": 32,
+      "num_timestep_buckets": 1000,
+      "num_views": 1,
+      "obs_horizon": 2,
+      "obs_loss_weight": 1.0,
+      "only_policy": false,
+      "only_wo_video_gen": false,
+      "past_action_window_size": 0,
+      "policy_and_video_gen": false,
+      "state_dim": 58,
+      "vision_encoder_load_weights": false,
+      "vision_encoder_path": "artifacts/robocasa-calibration/inputs/pretrained",
+      "vision_encoder_size": "s",
+      "vision_encoder_type": "dinov3"
+    },
+    "name": "QwenMMDiT",
+    "qwenvl": {
+      "attn_implementation": "sdpa",
+      "base_vlm": "artifacts/robocasa-calibration/inputs/qwen"
+    }
+  },
+  "is_debug": false,
+  "output_dir": "artifacts/robocasa-calibration/points/unused",
+  "run_id": "unused",
+  "run_root_dir": "artifacts/robocasa-calibration/points",
+  "seed": 42,
+  "trainer": {
+    "eval_interval": 1000,
+    "freeze_modules": "action_model.vision_encoder",
+    "gradient_accumulation_steps": 1,
+    "gradient_clipping": 1.0,
+    "is_resume": false,
+    "learning_rate": {
+      "action_model": 0.0001,
+      "base": 4e-05,
+      "qwen_vl_interface": 1e-05
+    },
+    "logging_frequency": 100,
+    "lr_scheduler_type": "cosine_with_min_lr",
+    "max_train_steps": 300000,
+    "num_warmup_steps": 15000,
+    "optimizer": {
+      "betas": [
+        0.9,
+        0.95
+      ],
+      "eps": 1e-08,
+      "weight_decay": 1e-08
+    },
+    "pretrained_checkpoint": "artifacts/robocasa-calibration/inputs/base/LDA-robocasa.pt",
+    "repeated_diffusion_steps": 4,
+    "save_interval": 10000,
+    "scheduler_specific_kwargs": {
+      "min_lr": 5e-07
+    },
+    "strict_pretrained_checkpoint": true
+  },
+  "wandb_entity": null,
+  "wandb_project": "lda-robocasa"
+}

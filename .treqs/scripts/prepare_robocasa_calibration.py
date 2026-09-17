@@ -23,6 +23,11 @@ def retry_hub_rate_limit(operation):
             return operation()
         except HfHubHTTPError as exc:
             response = exc.response
+            cause = exc.__cause__
+            # Hub 0.36 wraps a failed metadata HEAD (including HTTP 429) in
+            # LocalEntryNotFoundError, preserving the HTTP error as its cause.
+            if response is None and isinstance(cause, HfHubHTTPError):
+                response = cause.response
             if response is None or response.status_code != 429 or attempt == 6:
                 raise
             retry_after = response.headers.get("Retry-After", "")

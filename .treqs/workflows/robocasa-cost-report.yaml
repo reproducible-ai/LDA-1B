@@ -4,5 +4,5 @@ secrets:
 measure:
   command: |
     set -euo pipefail
-    timeout --signal=TERM --kill-after=30 7200 bash .treqs/scripts/run_cost_calibration.sh
+    timeout --signal=TERM --kill-after=30 6300 bash .treqs/scripts/run_cost_calibration.sh
   trace: "off"

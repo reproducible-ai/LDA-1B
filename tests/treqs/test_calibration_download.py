@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import huggingface_hub
 import pytest
 from huggingface_hub.hf_api import RepoFile
-from huggingface_hub.utils import HfHubHTTPError
+from huggingface_hub.utils import HfHubHTTPError, LocalEntryNotFoundError
 from requests import Response
 
 SOURCE = Path(__file__).resolve().parents[2]
@@ -17,7 +17,7 @@ prepare = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(prepare)
 
 
-@pytest.mark.parametrize("rate_limited", [False, True])
+@pytest.mark.parametrize("rate_limited", [False, True, "wrapped"])
 def test_only_selected_subtrees_are_enumerated_and_downloaded(tmp_path, monkeypatch, rate_limited):
     import huggingface_hub._snapshot_download as snapshot_module
 
@@ -49,7 +49,10 @@ def test_only_selected_subtrees_are_enumerated_and_downloaded(tmp_path, monkeypa
             response = Response()
             response.status_code = 429
             response.headers["RateLimit"] = '"resolvers";r=0;t=2'
-            raise HfHubHTTPError("Too Many Requests", response=response)
+            error = HfHubHTTPError("Too Many Requests", response=response)
+            if rate_limited == "wrapped":
+                raise LocalEntryNotFoundError("metadata request failed") from error
+            raise error
         downloads.append(filename)
         path = Path(local_dir) / filename
         path.parent.mkdir(parents=True, exist_ok=True)

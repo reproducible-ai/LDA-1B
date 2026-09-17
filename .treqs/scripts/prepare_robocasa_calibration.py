@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from pathlib import Path
 
@@ -11,6 +12,26 @@ from scripts.calibration_robocasa import encoded, load_inputs, sha256_file
 
 ROOT = Path("artifacts/robocasa-calibration")
 INPUTS = ROOT / "inputs"
+
+
+def retry_hub_rate_limit(operation):
+    """Respect Hub reset headers, with finite retries inside the workflow cap."""
+    from huggingface_hub.utils import HfHubHTTPError
+
+    for attempt in range(7):
+        try:
+            return operation()
+        except HfHubHTTPError as exc:
+            response = exc.response
+            if response is None or response.status_code != 429 or attempt == 6:
+                raise
+            retry_after = response.headers.get("Retry-After", "")
+            reset = re.search(r'(?:^|;)\s*t=(\d+)', response.headers.get("RateLimit", ""))
+            delay = int(retry_after) + 1 if retry_after.isdigit() else int(reset[1]) + 1 if reset else 310
+            if delay > 600:
+                raise
+            print(f"Hub rate limit: waiting {delay}s before retry {attempt + 1}/6", flush=True)
+            time.sleep(delay)
 
 
 def download_dataset(spec, destination, token):
@@ -28,15 +49,17 @@ def download_dataset(spec, destination, token):
     }
 
     def download(filename):
-        return hf_hub_download(**common, filename=filename, local_dir=destination, token=token)
+        return retry_hub_rate_limit(
+            lambda: hf_hub_download(**common, filename=filename, local_dir=destination, token=token)
+        )
 
     with ThreadPoolExecutor(max_workers=16) as pool:
         for index, folder in enumerate(spec["datasetFolders"], 1):
             print(f"Listing pinned dataset task {index}/{len(spec['datasetFolders'])}: {folder}", flush=True)
-            files = [
+            files = retry_hub_rate_limit(lambda: [
                 entry.path for entry in api.list_repo_tree(**common, path_in_repo=folder, recursive=True)
                 if isinstance(entry, RepoFile)
-            ]
+            ])
             if not files or any(not filename.startswith(folder + "/") for filename in files):
                 raise ValueError("missing or unexpected dataset task files: " + folder)
             for _ in pool.map(download, files):
@@ -113,7 +136,9 @@ def main():
 
     def download(repo, revision, destination, **kwargs):
         return Path(
-            snapshot_download(repo, revision=revision, token=token, local_dir=destination, max_workers=16, **kwargs)
+            retry_hub_rate_limit(lambda: snapshot_download(
+                repo, revision=revision, token=token, local_dir=destination, max_workers=16, **kwargs
+            ))
         )
 
     base = download(

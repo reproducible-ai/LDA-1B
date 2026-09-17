@@ -1,5 +1,9 @@
 # LDA-1B RoboCasa calibration
 
+## Required host checks
+
+Run `bash .treqs/scripts/check_calibration_local.sh` from the candidate checkout before requesting compute. This uses a pinned, cache-managed CPU Python environment; system Python does not need ML dependencies. It leaves candidate source/configuration untouched and avoids installing the full CUDA/DeepSpeed requirements on the host. The worker uses its separately pinned GPU setup. A missing system `pytest` is resolved by this bootstrap command.
+
 This optional workflow measures three **independent 100/200/400-update points**.
 The ordinary trainer retains the **300,000-update cosine scheduler and 15,000 warmup updates**.
 Every process loads the same pinned released RoboCasa checkpoint with a fresh optimizer and RNG.
